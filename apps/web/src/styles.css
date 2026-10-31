@@ -1,0 +1,154 @@
+:root {
+  color: #183a32;
+  background: #f3f0e6;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(35, 90, 120, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(35, 90, 120, 0.08) 1px, transparent 1px),
+    #f3f0e6;
+  background-size: 32px 32px;
+}
+
+.ledger-shell {
+  width: min(1120px, calc(100% - 40px));
+  min-height: 100vh;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.8fr);
+  align-items: center;
+  gap: clamp(40px, 8vw, 112px);
+  padding: 72px 0;
+}
+
+.ledger-intro {
+  max-width: 680px;
+}
+
+.context-line {
+  max-width: 34rem;
+  margin: 0 0 24px;
+  color: #235a78;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(4rem, 10vw, 8.5rem);
+  font-weight: 700;
+  letter-spacing: -0.075em;
+  line-height: 0.82;
+}
+
+.product-purpose {
+  max-width: 36rem;
+  margin: 40px 0;
+  color: #2d5148;
+  font-size: clamp(1.15rem, 2.4vw, 1.65rem);
+  line-height: 1.45;
+}
+
+.ledger-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  border: 1px solid rgba(24, 58, 50, 0.36);
+  background: rgba(24, 58, 50, 0.24);
+}
+
+.ledger-facts div {
+  min-height: 112px;
+  padding: 20px;
+  background: rgba(255, 254, 250, 0.86);
+}
+
+.ledger-facts dt {
+  margin-bottom: 20px;
+  color: #5a6c66;
+  font-size: 0.82rem;
+}
+
+.ledger-facts dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.balance-sheet {
+  position: relative;
+  padding: 34px 30px 38px;
+  border: 1px solid rgba(24, 58, 50, 0.4);
+  background: #fffefa;
+  box-shadow: 14px 14px 0 #235a78;
+  transform: rotate(1.25deg);
+}
+
+.balance-sheet::before {
+  content: "";
+  position: absolute;
+  inset: 54px 0 auto;
+  border-top: 1px solid rgba(24, 58, 50, 0.18);
+}
+
+.balance-sheet span {
+  display: block;
+  color: #5a6c66;
+  font-size: 0.9rem;
+}
+
+.balance-sheet strong {
+  display: block;
+  margin: 34px 0 28px;
+  color: #c56a3a;
+  font-family: Georgia, serif;
+  font-size: clamp(2.8rem, 6vw, 4.5rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}
+
+.balance-sheet p {
+  margin: 0;
+  color: #45615a;
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .ledger-shell {
+    grid-template-columns: 1fr;
+    align-content: center;
+    padding: 56px 0 72px;
+  }
+
+  .ledger-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-facts div {
+    min-height: auto;
+  }
+
+  .balance-sheet {
+    max-width: 430px;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}
