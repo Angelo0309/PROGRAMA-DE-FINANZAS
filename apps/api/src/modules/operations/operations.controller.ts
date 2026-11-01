@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Decimal } from 'decimal.js';
 import { z, type ZodType } from 'zod';
 
 import type { AccessTokenClaims } from '../auth/auth.service.js';
@@ -81,19 +82,29 @@ export class OperationsController {
     @Body() body: unknown,
   ) {
     const parsed = parse(purchaseSchema, body);
-    return this.service.createPurchase({
-      accountId: parsed.accountId,
-      purchasedAt: parsed.purchasedAt,
-      currency: parsed.currency,
-      mode: parsed.mode,
-      items: parsed.items,
-      ...(parsed.installmentCount === undefined
-        ? {}
-        : { installmentCount: parsed.installmentCount }),
-      storeId,
-      operatorUserId: request.user.sub,
-      idempotencyKey: requireIdempotencyKey(idempotencyKey),
-    });
+    return this.service
+      .createPurchase({
+        accountId: parsed.accountId,
+        purchasedAt: parsed.purchasedAt,
+        currency: parsed.currency,
+        mode: parsed.mode,
+        items: parsed.items,
+        ...(parsed.installmentCount === undefined
+          ? {}
+          : { installmentCount: parsed.installmentCount }),
+        storeId,
+        operatorUserId: request.user.sub,
+        idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      })
+      .then((purchase) => ({
+        ...purchase,
+        obligations: purchase.obligations.map((obligation) => ({
+          ...obligation,
+          amountDue: new Decimal(obligation.amountDue)
+            .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+            .toFixed(2),
+        })),
+      }));
   }
 
   @Post('accounts/:accountId/cuts')

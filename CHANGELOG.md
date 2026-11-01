@@ -6,4 +6,6 @@
 - Motor financiero 30/360 probado con Decimal.
 - Autenticacion Argon2id, JWT, sesiones rotatorias y aislamiento por tienda.
 - Compras, obligaciones, cortes, pagos completos, auditoria y portales por rol.
+- Bajas logicas auditadas y recorrido HTTP integral de activacion a comprobante.
+- Importes cobrables presentados con redondeo HALF_UP a dos decimales.
 - Prisma, migracion, semillas ficticias, Docker, CI y guias de despliegue.

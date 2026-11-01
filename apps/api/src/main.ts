@@ -19,7 +19,7 @@ async function bootstrap(): Promise<void> {
     new DocumentBuilder()
       .setTitle('CrediCuenta API')
       .setDescription('API para creditos comerciales multi-tienda')
-      .setVersion('0.5.0')
+      .setVersion('1.0.0')
       .build(),
   );
   SwaggerModule.setup('api/docs', app, document);

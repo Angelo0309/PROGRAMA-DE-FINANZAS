@@ -89,4 +89,27 @@ describe('OperationsController', () => {
       .expect(400);
     expect(service.createPayment).not.toHaveBeenCalled();
   });
+
+  it('presents the payable obligation amount rounded HALF_UP to two decimals', async () => {
+    service.createPurchase.mockResolvedValueOnce({
+      id: 'purchase-precise',
+      currency: 'PEN',
+      total: '120.00',
+      obligations: [{ id: 'obligation-1', amountDue: '121.075000000000' }],
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/stores/store-1/purchases')
+      .set('Idempotency-Key', 'purchase-precise-1')
+      .send({
+        accountId: 'account-1',
+        purchasedAt: '2026-10-20T10:00:00-05:00',
+        currency: 'PEN',
+        mode: 'END_OF_MONTH',
+        items: [{ productId: 'product-1', quantity: '1' }],
+      })
+      .expect(201);
+
+    expect(response.body.obligations[0].amountDue).toBe('121.08');
+  });
 });
