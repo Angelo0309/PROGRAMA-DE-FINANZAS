@@ -227,6 +227,7 @@ model Purchase {
   mode                PurchaseMode     @map("modalidad")
   installmentCount    Int?             @map("numero_cuotas") @db.UnsignedSmallInt
   purchasedAt         DateTime         @map("comprado_en") @db.DateTime(3)
+  assignedCutAt       DateTime         @map("corte_asignado_en") @db.DateTime(3)
   currency            String           @db.Char(3)
   subtotal            Decimal          @db.Decimal(19, 4)
   total               Decimal          @db.Decimal(19, 4)
@@ -242,6 +243,7 @@ model Purchase {
   @@id([id, storeId])
   @@unique([storeId, idempotencyKey])
   @@index([accountId, purchasedAt])
+  @@index([accountId, assignedCutAt])
   @@map("COMPRA")
 }
 

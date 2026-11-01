@@ -3,6 +3,11 @@ import { JwtModule, JwtService } from '@nestjs/jwt';
 
 import { PrismaService } from '../../database/prisma.service.js';
 import { AuthController } from './auth.controller.js';
+import {
+  JwtAccessGuard,
+  PlatformAdminGuard,
+  StoreAccessGuard,
+} from './auth.guards.js';
 import { AuthService, type AuthServiceOptions } from './auth.service.js';
 import { PrismaAuthRepository } from './prisma-auth.repository.js';
 
@@ -35,6 +40,9 @@ function loadAuthOptions(): AuthServiceOptions {
   providers: [
     PrismaService,
     PrismaAuthRepository,
+    JwtAccessGuard,
+    StoreAccessGuard,
+    PlatformAdminGuard,
     {
       provide: AuthService,
       inject: [PrismaAuthRepository, JwtService],
@@ -44,6 +52,12 @@ function loadAuthOptions(): AuthServiceOptions {
       ) => new AuthService(repository, jwtService, loadAuthOptions()),
     },
   ],
-  exports: [AuthService],
+  exports: [
+    AuthService,
+    JwtModule,
+    JwtAccessGuard,
+    StoreAccessGuard,
+    PlatformAdminGuard,
+  ],
 })
 export class AuthModule {}

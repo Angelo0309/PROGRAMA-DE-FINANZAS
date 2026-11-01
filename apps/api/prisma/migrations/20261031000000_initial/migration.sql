@@ -138,6 +138,7 @@ CREATE TABLE `COMPRA` (
     `modalidad` ENUM('END_OF_MONTH', 'INSTALLMENTS') NOT NULL,
     `numero_cuotas` SMALLINT UNSIGNED NULL,
     `comprado_en` DATETIME(3) NOT NULL,
+    `corte_asignado_en` DATETIME(3) NOT NULL,
     `currency` CHAR(3) NOT NULL,
     `subtotal` DECIMAL(19, 4) NOT NULL,
     `total` DECIMAL(19, 4) NOT NULL,
@@ -145,6 +146,7 @@ CREATE TABLE `COMPRA` (
     `creado_en` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `COMPRA_cuenta_id_comprado_en_idx`(`cuenta_id`, `comprado_en`),
+    INDEX `COMPRA_cuenta_id_corte_asignado_en_idx`(`cuenta_id`, `corte_asignado_en`),
     UNIQUE INDEX `COMPRA_tienda_id_clave_idempotencia_key`(`tienda_id`, `clave_idempotencia`),
     PRIMARY KEY (`id`, `tienda_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
