@@ -23,6 +23,35 @@ const loginSchema = z.object({
 const money = (currency: string, amount: string) =>
   `${currency === 'PEN' ? 'S/' : currency} ${Number(amount).toFixed(2)}`;
 
+const platformNavigation = [
+  'Dashboard',
+  'Gestión de tiendas',
+  'Gestión de usuarios',
+  'Solicitudes',
+  'Reportes',
+  'Configuración',
+  'Auditoría',
+];
+const businessNavigation = [
+  'Panel del negocio',
+  'Productos y servicios',
+  'Clientes',
+  'Registrar compra',
+  'Cuentas corrientes',
+  'Planes de pago',
+  'Registrar pago',
+  'Reporte de corte',
+  'Ayuda',
+];
+const clientNavigation = [
+  'Mi resumen',
+  'Mis compras',
+  'Estado de cuenta',
+  'Plan de pagos',
+  'Historial de pagos',
+  'Ayuda',
+];
+
 function LoginPanel({
   api,
   onAuthenticated,
@@ -58,23 +87,15 @@ function LoginPanel({
 
   return (
     <main className="login-shell">
-      <section className="brand-panel" aria-labelledby="product-title">
-        <p className="eyebrow">Crédito comercial con cuentas claras</p>
-        <h1 id="product-title">CrediCuenta</h1>
-        <p className="brand-copy">
-          Compras, cortes y pagos reunidos en un libro digital pensado para
-          comercios de barrio.
-        </p>
-        <div className="rule-card">
-          <span>Regla financiera</span>
-          <strong>30 / 360</strong>
-          <p>Los importes oficiales provienen de la API.</p>
+      <section className="login-panel" aria-labelledby="product-title">
+        <div className="login-brand">
+          <span className="brand-symbol" aria-hidden="true">CC</span>
+          <h1 id="product-title">CrediCuenta</h1>
         </div>
-      </section>
-      <section className="login-panel" aria-labelledby="login-title">
-        <p className="folio">ACCESO · 01</p>
-        <h2 id="login-title">Abrir mi cuenta</h2>
-        <p className="muted">Use las credenciales asignadas a su rol.</p>
+        <p className="login-subtitle">Administración de cuentas corrientes y créditos</p>
+        <div className="login-divider" />
+        <h2 id="login-title">Inicia sesión</h2>
+        <p className="muted">Ingresa tus credenciales para acceder al sistema.</p>
         <form onSubmit={submit} noValidate>
           <label htmlFor="identifier">Correo o usuario</label>
           <input
@@ -93,14 +114,14 @@ function LoginPanel({
           />
           {error && <Alert severity="error">{error}</Alert>}
           <button className="primary-button" disabled={submitting} type="submit">
-            {submitting ? 'Verificando…' : 'Ingresar'}
+            {submitting ? 'Verificando…' : 'Iniciar sesión'}
           </button>
         </form>
         <p className="help-copy">
-          Sus tasas y montos nunca se recalculan en este navegador; se muestran
-          tal como los entrega el motor financiero.
+          El acceso y las funciones disponibles dependen del rol asignado.
         </p>
       </section>
+      <p className="login-footer">© 2026 CrediCuenta · Sistema de administración de créditos</p>
     </main>
   );
 }
@@ -109,31 +130,48 @@ function WorkspaceShell({
   profile,
   title,
   kicker,
+  navigation,
   onLogout,
   children,
 }: {
   profile: Profile;
   title: string;
   kicker: string;
+  navigation: string[];
   onLogout: () => void;
   children: React.ReactNode;
 }) {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="wordmark" href="#inicio" aria-label="CrediCuenta inicio">
-          Credi<span>Cuenta</span>
-        </a>
+        <span className="topbar-context">{kicker}</span>
         <div className="profile-chip">
+          <a href="#ayuda">Ayuda</a>
           <span>{profile.displayName}</span>
-          <button type="button" onClick={onLogout}>Salir</button>
+          <span className="avatar" aria-hidden="true">{profile.displayName.slice(0, 1)}</span>
         </div>
       </header>
       <aside className="side-rail" aria-label="Secciones">
-        <span className="rail-index">CC</span>
-        <a href="#inicio">Resumen</a>
-        <a href="#actividad">Actividad</a>
-        <a href="#ayuda">Ayuda</a>
+        <a className="wordmark" href="#inicio" aria-label="CrediCuenta inicio">
+          <span className="brand-symbol" aria-hidden="true">CC</span>
+          <span className="wordmark-copy"><strong>CrediCuenta</strong><small>Control simple, cuentas claras</small></span>
+        </a>
+        <div className="sidebar-profile">
+          <strong>{profile.displayName}</strong>
+          <span>{kicker}</span>
+        </div>
+        <nav className="sidebar-navigation" aria-label="Secciones">
+          {navigation.map((item, index) => (
+            <a className={index === 0 ? 'active' : ''} href={index === 0 ? '#inicio' : '#actividad'} key={item}>
+              <span className="nav-indicator" aria-hidden="true" />
+              {item}
+            </a>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <span>{profile.displayName}</span>
+          <button type="button" onClick={onLogout}>Cerrar sesión</button>
+        </div>
       </aside>
       <main className="workspace" id="inicio">
         <header className="workspace-heading">
@@ -449,7 +487,7 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
 
   if (profile.platformRole === 'PLATFORM_ADMIN') {
     return (
-      <WorkspaceShell profile={profile} title="Control de plataforma" kicker="Gobierno y trazabilidad" onLogout={logout}>
+      <WorkspaceShell profile={profile} title="Control de plataforma" kicker="Gobierno y trazabilidad" navigation={platformNavigation} onLogout={logout}>
         <PlatformWorkspace api={api} profile={profile} />
       </WorkspaceShell>
     );
@@ -460,14 +498,14 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
   );
   if (businessAccess) {
     return (
-      <WorkspaceShell profile={profile} title="Mesa de crédito" kicker="Operación del negocio" onLogout={logout}>
+      <WorkspaceShell profile={profile} title="Mesa de crédito" kicker="Operación del negocio" navigation={businessNavigation} onLogout={logout}>
         <BusinessWorkspace api={api} profile={profile} access={businessAccess} />
       </WorkspaceShell>
     );
   }
 
   return (
-    <WorkspaceShell profile={profile} title="Mi CrediCuenta" kicker="Estado personal" onLogout={logout}>
+    <WorkspaceShell profile={profile} title="Mi CrediCuenta" kicker="Estado personal" navigation={clientNavigation} onLogout={logout}>
       <ClientWorkspace api={api} />
     </WorkspaceShell>
   );

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './app';
@@ -24,7 +24,7 @@ function makeApi(profile: unknown) {
 async function login() {
   fireEvent.change(screen.getByLabelText(/correo o usuario/i), { target: { value: 'demo@credicuenta.test' } });
   fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'DemoSegura#2026' } });
-  fireEvent.click(screen.getByRole('button', { name: /ingresar/i }));
+  fireEvent.click(screen.getByRole('button', { name: /iniciar sesión/i }));
 }
 
 describe('App por roles', () => {
@@ -35,7 +35,7 @@ describe('App por roles', () => {
     render(<App api={makeApi({}) as never} />);
     expect(screen.getByRole('heading', { name: 'CrediCuenta' })).toBeVisible();
     expect(screen.getByLabelText(/correo o usuario/i)).toBeVisible();
-    expect(screen.getByText(/los importes oficiales provienen de la api/i)).toBeVisible();
+    expect(screen.getByRole('button', { name: /iniciar sesión/i })).toBeVisible();
   });
 
   it('routes a platform administrator to store and audit management', async () => {
@@ -58,6 +58,11 @@ describe('App por roles', () => {
     render(<App api={api as never} />);
     await login();
     expect(await screen.findByRole('heading', { name: /mesa de crédito/i })).toBeVisible();
+    const navigation = screen.getByRole('navigation', { name: /secciones/i });
+    expect(within(navigation).getByText('Panel del negocio')).toBeVisible();
+    expect(within(navigation).getByText('Productos y servicios')).toBeVisible();
+    expect(within(navigation).getByText('Registrar compra')).toBeVisible();
+    expect(within(navigation).getByText('Reporte de corte')).toBeVisible();
     await screen.findByRole('option', { name: /CC-001/i });
     fireEvent.change(screen.getByLabelText(/^cuenta$/i), { target: { value: 'account-1' } });
     fireEvent.change(screen.getByLabelText(/producto o servicio/i), { target: { value: 'product-1' } });
