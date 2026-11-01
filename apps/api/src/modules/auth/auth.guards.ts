@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  Inject,
   Injectable,
   SetMetadata,
   UnauthorizedException,
@@ -31,7 +32,7 @@ type AuthenticatedRequest = {
 
 @Injectable()
 export class JwtAccessGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(@Inject(JwtService) private readonly jwtService: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -55,8 +56,8 @@ export class JwtAccessGuard implements CanActivate {
 @Injectable()
 export class StoreAccessGuard implements CanActivate {
   constructor(
-    private readonly reflector: Reflector,
-    private readonly authService: AuthService,
+    @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(AuthService) private readonly authService: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

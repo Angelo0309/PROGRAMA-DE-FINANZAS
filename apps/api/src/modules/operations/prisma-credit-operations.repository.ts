@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 
 import { PrismaService } from '../../database/prisma.service.js';
@@ -435,7 +435,7 @@ class PrismaCreditOperationsTransaction implements CreditOperationsTransaction {
 export class PrismaCreditOperationsRepository
   implements CreditOperationsRepository
 {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async withLockedAccount<T>(
     accountId: string,

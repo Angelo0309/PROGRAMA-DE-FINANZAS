@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   HttpCode,
+  Inject,
   Post,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
@@ -43,7 +44,7 @@ function parseBody<T>(schema: ZodType<T>, body: unknown): T {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(@Inject(AuthService) private readonly authService: AuthService) {}
 
   @Post('activate')
   activate(@Body() body: unknown) {

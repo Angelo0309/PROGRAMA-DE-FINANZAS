@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { PrismaService } from '../../database/prisma.service.js';
@@ -9,7 +9,8 @@ export class CutScheduler {
   private readonly logger = new Logger(CutScheduler.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(CreditOperationsService)
     private readonly operations: CreditOperationsService,
   ) {}
 

@@ -1,10 +1,10 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service.js';
 
 @Injectable()
 export class HealthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   live() {
     return { status: 'ok', timestamp: new Date().toISOString() };

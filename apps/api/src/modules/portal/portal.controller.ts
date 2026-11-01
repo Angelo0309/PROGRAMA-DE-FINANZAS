@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Post,
   Query,
   Req,
@@ -55,7 +56,7 @@ type AuthenticatedRequest = { user: AccessTokenClaims };
 @UseGuards(JwtAccessGuard, PlatformAdminGuard)
 @Controller('platform')
 export class PlatformController {
-  constructor(private readonly service: PortalService) {}
+  constructor(@Inject(PortalService) private readonly service: PortalService) {}
 
   @Get('stores')
   listStores() {
@@ -106,7 +107,7 @@ export class PlatformController {
 @UseGuards(JwtAccessGuard)
 @Controller('me')
 export class MeController {
-  constructor(private readonly service: PortalService) {}
+  constructor(@Inject(PortalService) private readonly service: PortalService) {}
 
   @Get('profile')
   getProfile(@Req() request: AuthenticatedRequest) {

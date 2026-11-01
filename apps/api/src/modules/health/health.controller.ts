@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 
 import { HealthService } from './health.service.js';
@@ -6,7 +6,7 @@ import { HealthService } from './health.service.js';
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly health: HealthService) {}
+  constructor(@Inject(HealthService) private readonly health: HealthService) {}
 
   @Get('live')
   live() {

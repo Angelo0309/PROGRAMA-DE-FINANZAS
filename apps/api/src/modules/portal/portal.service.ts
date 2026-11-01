@@ -1,12 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
 
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service.js';
 
 @Injectable()
 export class PortalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getMyProfile(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({

@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   Post,
   Query,
@@ -80,7 +81,7 @@ type AuthenticatedRequest = { user: AccessTokenClaims };
 @StoreRoles('STORE_ADMIN', 'OPERATOR')
 @Controller()
 export class BusinessController {
-  constructor(private readonly service: BusinessService) {}
+  constructor(@Inject(BusinessService) private readonly service: BusinessService) {}
 
   @Get('stores/:storeId/clients')
   listClients(@Param('storeId') storeId: string) {

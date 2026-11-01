@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service.js';
 import type {
@@ -13,7 +13,7 @@ import type {
 
 @Injectable()
 export class PrismaAuthRepository implements AuthRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async findInvitationByTokenHash(
     tokenHash: string,

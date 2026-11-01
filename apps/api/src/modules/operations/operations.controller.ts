@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Headers,
+  Inject,
   Param,
   Post,
   Req,
@@ -67,7 +68,10 @@ type AuthenticatedRequest = { user: AccessTokenClaims };
 @StoreRoles('STORE_ADMIN', 'OPERATOR')
 @Controller()
 export class OperationsController {
-  constructor(private readonly service: CreditOperationsService) {}
+  constructor(
+    @Inject(CreditOperationsService)
+    private readonly service: CreditOperationsService,
+  ) {}
 
   @Post('stores/:storeId/purchases')
   createPurchase(
