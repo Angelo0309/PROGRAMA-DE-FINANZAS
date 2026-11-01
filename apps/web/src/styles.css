@@ -239,7 +239,7 @@ td { color: #d9e2eb; font-size: .76rem; }
 .balance-ticket div { display: flex; justify-content: space-between; margin-top: 38px; color: #b9ced8; font-size: .68rem; }
 .loading-screen { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 18px; color: var(--muted); }
 
-.product-page, .client-page, .purchase-page { display: grid; gap: 16px; }
+.product-page, .client-page, .purchase-page, .account-page, .schedule-page { display: grid; gap: 16px; }
 .page-lead { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: -12px; }
 .page-lead p { max-width: 680px; margin: 0; color: var(--muted); font-size: .76rem; }
 .compact-button { min-height: 38px; margin: 0; padding: 8px 15px; white-space: nowrap; }
@@ -274,6 +274,8 @@ td { color: #d9e2eb; font-size: .76rem; }
 .status-pill { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: .62rem; font-weight: 650; }
 .status-pill.ready { background: rgba(59, 194, 114, .14); color: #78dfa0; }
 .status-pill.pending { background: rgba(255, 190, 92, .12); color: #f3c46f; }
+.status-pill.overdue { background: rgba(255, 121, 121, .13); color: #ff9b9b; }
+.status-pill.voided { background: rgba(147, 164, 183, .12); color: #a9bacb; }
 .catalog-empty { margin: 0; padding: 40px 20px; text-align: center; }
 .product-drawer { position: sticky; top: 75px; overflow: hidden; }
 .drawer-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 17px 19px; border-bottom: 1px solid var(--border); }
@@ -344,6 +346,40 @@ td { color: #d9e2eb; font-size: .76rem; }
 .purchase-actions p { max-width: 620px; margin: 0; color: var(--muted); font-size: .67rem; line-height: 1.45; }
 .purchase-actions > div { display: flex; gap: 9px; }
 .purchase-actions .primary-button { min-width: 170px; margin: 0; }
+.account-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.account-layout.form-open { grid-template-columns: minmax(0, 1fr) minmax(330px, 380px); }
+.account-content { display: grid; min-width: 0; gap: 16px; }
+.account-table { min-width: 910px; }
+.account-table th:first-child { width: 19%; }
+.account-table th, .account-table td { padding: 12px 9px; font-size: .7rem; }
+.account-table tbody tr { transition: background-color .14s ease; }
+.account-table tbody tr:hover { background: rgba(66, 199, 229, .025); }
+.account-table tbody tr.selected-row { background: rgba(59, 194, 114, .055); box-shadow: inset 3px 0 var(--green); }
+.account-condition-panel { padding: 21px; border: 1px solid var(--border); border-radius: 8px; background: linear-gradient(145deg, #102238, #0d1b2b); }
+.account-condition-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-bottom: 17px; border-bottom: 1px solid var(--border); }
+.account-condition-heading span { color: var(--muted); font-size: .66rem; }
+.account-condition-heading h2 { margin: 5px 0 0; font-size: 1.05rem; }
+.account-condition-heading > strong { color: #8ce3ad; font-size: .78rem; }
+.condition-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 17px; }
+.condition-grid > div { display: grid; align-content: start; gap: 6px; min-height: 92px; padding: 13px; border: 1px solid var(--border); border-radius: 7px; background: #0a1725; }
+.condition-grid span, .condition-grid small { color: var(--muted); font-size: .61rem; }
+.condition-grid strong { color: #e7f0f7; font-size: .72rem; line-height: 1.4; }
+.account-form { max-height: calc(100vh - 95px); overflow-y: auto; }
+.form-divider { display: flex; align-items: center; gap: 10px; margin: 13px 0 2px; color: var(--cyan); font-size: .63rem; font-weight: 700; }
+.form-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.form-pair label { display: grid; gap: 7px; }
+.schedule-selector { display: grid; grid-template-columns: minmax(240px, 520px); gap: 7px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.schedule-selector label { margin: 0; }
+.schedule-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 0; }
+.schedule-metrics article { min-height: 98px; }
+.schedule-metrics article span { margin-bottom: 14px; }
+.schedule-metrics article strong { font-size: clamp(1rem, 2vw, 1.5rem); }
+.schedule-panel { min-width: 0; }
+.schedule-table { min-width: 990px; }
+.schedule-table th, .schedule-table td { padding: 12px 9px; font-size: .69rem; white-space: nowrap; }
+.schedule-empty { margin: 0; padding: 42px 20px; text-align: center; }
+.schedule-loading { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 120px; color: var(--muted); font-size: .72rem; }
 
 @media (max-width: 850px) {
   .app-shell { grid-template-columns: 1fr; grid-template-rows: 58px auto; }
@@ -358,6 +394,9 @@ td { color: #d9e2eb; font-size: .76rem; }
   .product-drawer { position: static; grid-row: 1; }
   .selected-accounts article { grid-template-columns: 1fr 1fr; }
   .purchase-main-grid { grid-template-columns: 1fr; }
+  .account-layout.form-open { grid-template-columns: 1fr; }
+  .condition-grid { grid-template-columns: 1fr 1fr; }
+  .schedule-metrics { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 480px) {
@@ -374,6 +413,8 @@ td { color: #d9e2eb; font-size: .76rem; }
   .purchase-actions { align-items: stretch; display: grid; }
   .purchase-actions > div { display: grid; grid-template-columns: 1fr 1.35fr; }
   .purchase-actions .primary-button { min-width: 0; }
+  .account-condition-heading { align-items: flex-start; display: grid; }
+  .condition-grid, .form-pair, .schedule-metrics { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -46,12 +46,6 @@ const productSchema = z.object({
     })
     .optional(),
 });
-const accountSchema = z.object({
-  customerId: z.string().min(1),
-  accountNumber: z.string().min(1).max(40),
-  currency: z.string().length(3),
-  creditLimit: decimal,
-});
 const conditionSchema = z.object({
   storeId: z.string().min(1),
   compensatoryRateKind: z.enum(['EFFECTIVE_ANNUAL', 'NOMINAL_ANNUAL']),
@@ -63,6 +57,13 @@ const conditionSchema = z.object({
   maxInstallments: z.number().int().min(1).max(120),
   graceMonths: z.number().int().min(0).max(24),
   validFrom: z.string().datetime({ offset: true }),
+});
+const accountSchema = z.object({
+  customerId: z.string().min(1),
+  accountNumber: z.string().min(1).max(40),
+  currency: z.string().length(3),
+  creditLimit: decimal,
+  initialCondition: conditionSchema.omit({ storeId: true }).optional(),
 });
 
 function parse<T>(schema: ZodType<T>, body: unknown): T {
@@ -179,9 +180,16 @@ export class BusinessController {
     @Req() request: AuthenticatedRequest,
     @Body() body: unknown,
   ) {
+    const value = parse(accountSchema, body);
     return this.service.createAccount(
       storeId,
-      parse(accountSchema, body),
+      {
+        customerId: value.customerId,
+        accountNumber: value.accountNumber,
+        currency: value.currency,
+        creditLimit: value.creditLimit,
+        ...(value.initialCondition === undefined ? {} : { initialCondition: value.initialCondition }),
+      },
       request.user.sub,
     );
   }

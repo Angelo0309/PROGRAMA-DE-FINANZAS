@@ -13,6 +13,50 @@ export interface AccountView {
   creditLimit: string;
   originalOutstanding: string;
   currency: string;
+  currentCondition?: CreditConditionView;
+}
+
+export interface CreditConditionView {
+  id: string;
+  version: number;
+  compensatoryRateKind: 'EFFECTIVE_ANNUAL' | 'NOMINAL_ANNUAL';
+  compensatoryRate: string;
+  lateRateKind: 'EFFECTIVE_ANNUAL' | 'NOMINAL_ANNUAL';
+  lateRate: string;
+  billingDay: number;
+  dueDay: number;
+  maxInstallments: number;
+  graceMonths: number;
+  validFrom: string;
+  validUntil: string | null;
+}
+
+export interface CreditConditionInput {
+  storeId: string;
+  compensatoryRateKind: 'EFFECTIVE_ANNUAL' | 'NOMINAL_ANNUAL';
+  compensatoryRate: string;
+  lateRateKind: 'EFFECTIVE_ANNUAL' | 'NOMINAL_ANNUAL';
+  lateRate: string;
+  billingDay: number;
+  dueDay: number;
+  maxInstallments: number;
+  graceMonths: number;
+  validFrom: string;
+}
+
+export interface ScheduleItemView {
+  id: string;
+  purchaseId: string;
+  installmentNumber: number;
+  dueDate: string;
+  openingBalance: string;
+  principalDue: string;
+  compensatoryInterest: string;
+  lateInterest: string;
+  amountDue: string;
+  paidAmount: string;
+  currency: string;
+  status: string;
 }
 
 export interface ClientView {
@@ -92,6 +136,15 @@ export interface ApiClient {
   listProducts(storeId: string): Promise<ProductView[]>;
   createProduct(storeId: string, input: CreateProductInput): Promise<ProductView>;
   listAccounts(storeId: string): Promise<AccountView[]>;
+  createAccount(storeId: string, input: {
+    customerId: string;
+    accountNumber: string;
+    currency: string;
+    creditLimit: string;
+    initialCondition?: Omit<CreditConditionInput, 'storeId'>;
+  }): Promise<AccountView>;
+  addCreditCondition(accountId: string, input: CreditConditionInput): Promise<CreditConditionView>;
+  getSchedule(accountId: string, storeId: string): Promise<ScheduleItemView[]>;
   createPurchase(
     storeId: string,
     input: {
@@ -201,6 +254,26 @@ class HttpApiClient implements ApiClient {
 
   listAccounts(storeId: string) {
     return this.request<AccountView[]>(`/stores/${storeId}/accounts`);
+  }
+
+  createAccount(storeId: string, input: Parameters<ApiClient['createAccount']>[1]) {
+    return this.request<AccountView>(`/stores/${storeId}/accounts`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  addCreditCondition(accountId: string, input: CreditConditionInput) {
+    return this.request<CreditConditionView>(`/accounts/${accountId}/credit-conditions`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  getSchedule(accountId: string, storeId: string) {
+    return this.request<ScheduleItemView[]>(
+      `/accounts/${accountId}/schedule?storeId=${encodeURIComponent(storeId)}`,
+    );
   }
 
   createPurchase(

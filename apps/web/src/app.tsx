@@ -17,8 +17,10 @@ import {
   type AccountView,
   type ApiClient,
   type ClientView,
+  type CreditConditionView,
   type ProductView,
   type Profile,
+  type ScheduleItemView,
   type StoreAccess,
 } from './api/client';
 import './styles.css';
@@ -48,9 +50,47 @@ const clientFormSchema = z.object({
   phone: z.string().trim().max(32),
   address: z.string().trim().max(255),
 });
+const accountFormSchema = z.object({
+  customerId: z.string().min(1, 'Seleccione un cliente.'),
+  accountNumber: z.string().trim().min(1, 'Ingrese el número de cuenta.').max(40),
+  creditLimit: z.string().regex(/^\d+(?:\.\d+)?$/, 'Ingrese un límite válido.').refine((value) => Number(value) > 0, 'El límite debe ser mayor que cero.'),
+  compensatoryRate: z.string().regex(/^\d+(?:\.\d+)?$/, 'Ingrese una tasa compensatoria válida.'),
+  lateRate: z.string().regex(/^\d+(?:\.\d+)?$/, 'Ingrese una tasa moratoria válida.'),
+  billingDay: z.coerce.number().int().min(1).max(30),
+  dueDay: z.coerce.number().int().min(1).max(30),
+  maxInstallments: z.coerce.number().int().min(1).max(120),
+  graceMonths: z.coerce.number().int().min(0).max(24),
+  validFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ingrese la fecha de vigencia.'),
+});
 
 const money = (currency: string, amount: string) =>
   `${currency === 'PEN' ? 'S/' : currency} ${Number(amount).toFixed(2)}`;
+
+const commercialDate = (date: string) => {
+  const [year, month, day] = date.slice(0, 10).split('-');
+  return `${day}/${month}/${year}`;
+};
+
+export function localDateInTimeZone(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+const rateAsPercentage = (rate: string) => `${(Number(rate) * 100).toFixed(2)} %`;
+const rateKindLabel = (kind: CreditConditionView['compensatoryRateKind']) => kind === 'NOMINAL_ANNUAL' ? 'Nominal anual' : 'Efectiva anual';
+
+const obligationStatus = (status: string) => ({
+  PAID: { label: 'Pagada', tone: 'ready' },
+  OVERDUE: { label: 'Vencida', tone: 'overdue' },
+  VOIDED: { label: 'Anulada', tone: 'voided' },
+  PENDING: { label: 'Pendiente', tone: 'pending' },
+}[status] ?? { label: status, tone: 'pending' });
 
 const platformNavigation = [
   'Dashboard',
@@ -783,11 +823,13 @@ function PurchaseRegistration({
   access,
   accounts,
   products,
+  onPurchaseSaved,
 }: {
   api: ApiClient;
   access: StoreAccess;
   accounts: AccountView[];
   products: ProductView[];
+  onPurchaseSaved: () => Promise<void>;
 }) {
   const [accountId, setAccountId] = useState('');
   const [productId, setProductId] = useState('');
@@ -868,6 +910,7 @@ function PurchaseRegistration({
       setProductId('');
       setQuantity('1');
       purchaseKey.current = null;
+      await onPurchaseSaved();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'No fue posible registrar la compra.');
     } finally {
@@ -998,6 +1041,255 @@ function PurchaseRegistration({
   );
 }
 
+function AccountManagement({
+  api,
+  access,
+  clients,
+  accounts,
+  setAccounts,
+}: {
+  api: ApiClient;
+  access: StoreAccess;
+  clients: ClientView[];
+  accounts: AccountView[];
+  setAccounts: Dispatch<SetStateAction<AccountView[]>>;
+}) {
+  const [selectedAccountId, setSelectedAccountId] = useState(accounts[0]?.id ?? '');
+  const [showForm, setShowForm] = useState(false);
+  const [customerId, setCustomerId] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [creditLimit, setCreditLimit] = useState('');
+  const [compensatoryRate, setCompensatoryRate] = useState('0.24');
+  const [lateRate, setLateRate] = useState('0.36');
+  const [billingDay, setBillingDay] = useState('20');
+  const [dueDay, setDueDay] = useState('28');
+  const [maxInstallments, setMaxInstallments] = useState('6');
+  const [graceMonths, setGraceMonths] = useState('0');
+  const [validFrom, setValidFrom] = useState(localDateInTimeZone(new Date(), 'America/Lima'));
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? accounts[0];
+  const canManageAccounts = access.role === 'STORE_ADMIN';
+
+  useEffect(() => {
+    if (!selectedAccountId && accounts[0]) setSelectedAccountId(accounts[0].id);
+  }, [accounts, selectedAccountId]);
+
+  function resetForm() {
+    setCustomerId('');
+    setAccountNumber('');
+    setCreditLimit('');
+    setCompensatoryRate('0.24');
+    setLateRate('0.36');
+    setBillingDay('20');
+    setDueDay('28');
+    setMaxInstallments('6');
+    setGraceMonths('0');
+    setValidFrom(localDateInTimeZone(new Date(), 'America/Lima'));
+    setError('');
+  }
+
+  async function saveAccount(event: FormEvent) {
+    event.preventDefault();
+    const parsed = accountFormSchema.safeParse({
+      customerId,
+      accountNumber,
+      creditLimit,
+      compensatoryRate,
+      lateRate,
+      billingDay,
+      dueDay,
+      maxInstallments,
+      graceMonths,
+      validFrom,
+    });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Revise los datos de la cuenta.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const account = await api.createAccount(access.storeId, {
+        customerId: parsed.data.customerId,
+        accountNumber: parsed.data.accountNumber,
+        currency: access.currency,
+        creditLimit: parsed.data.creditLimit,
+        initialCondition: {
+          compensatoryRateKind: 'EFFECTIVE_ANNUAL',
+          compensatoryRate: parsed.data.compensatoryRate,
+          lateRateKind: 'EFFECTIVE_ANNUAL',
+          lateRate: parsed.data.lateRate,
+          billingDay: parsed.data.billingDay,
+          dueDay: parsed.data.dueDay,
+          maxInstallments: parsed.data.maxInstallments,
+          graceMonths: parsed.data.graceMonths,
+          validFrom: `${parsed.data.validFrom}T00:00:00-05:00`,
+        },
+      });
+      const customer = clients.find((client) => client.id === parsed.data.customerId);
+      const completeAccount = { ...account, customerName: customer?.fullName };
+      setAccounts((current) => [...current, completeAccount].sort((left, right) => left.accountNumber.localeCompare(right.accountNumber)));
+      setSelectedAccountId(account.id);
+      setNotice('Cuenta y condición crediticia guardadas correctamente.');
+      resetForm();
+      setShowForm(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'No fue posible guardar la cuenta.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const condition = selectedAccount?.currentCondition;
+
+  return (
+    <section className="account-page">
+      <div className="page-lead">
+        <p>Administra límites, capital original pendiente y condiciones financieras por cliente.</p>
+        {canManageAccounts && <button className="primary-button compact-button" type="button" onClick={() => setShowForm(true)}>+ Nueva cuenta</button>}
+      </div>
+      {notice && <Alert severity="success">{notice}</Alert>}
+
+      <section className="metric-strip product-metrics" aria-label="Indicadores de cuentas">
+        <article><span>Cuentas activas</span><strong>{accounts.length}</strong></article>
+        <article><span>Con condición vigente</span><strong>{accounts.filter((account) => account.currentCondition).length}</strong></article>
+        <article><span>Moneda de la tienda</span><strong className="store-name">{access.currency}</strong></article>
+      </section>
+
+      <div className={showForm ? 'account-layout form-open' : 'account-layout'}>
+        <div className="account-content">
+          <section className="catalog-panel" aria-labelledby="accounts-title">
+            <div className="catalog-panel-heading"><h2 id="accounts-title">Cuentas corrientes</h2><span>Límites y saldos oficiales</span></div>
+            <div className="table-wrapper">
+              <table className="account-table" aria-label="Cuentas corrientes de clientes">
+                <thead><tr><th>Cliente</th><th>Cuenta</th><th>Límite</th><th>Capital utilizado</th><th>Disponible</th><th>Condición</th></tr></thead>
+                <tbody>{accounts.map((account) => (
+                  <tr key={account.id} className={selectedAccount?.id === account.id ? 'selected-row' : ''}>
+                    <td><button className="table-link" type="button" onClick={() => setSelectedAccountId(account.id)}>{account.customerName}</button></td>
+                    <td>{account.accountNumber}</td>
+                    <td className="money-cell">{money(account.currency, account.creditLimit)}</td>
+                    <td>{money(account.currency, account.originalOutstanding)}</td>
+                    <td>{money(account.currency, String(Number(account.creditLimit) - Number(account.originalOutstanding)))}</td>
+                    <td><span className={`status-pill ${account.currentCondition ? 'ready' : 'pending'}`}>{account.currentCondition ? `Versión ${account.currentCondition.version}` : 'Pendiente'}</span></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </section>
+
+          {selectedAccount && (
+            <section className="account-condition-panel" aria-labelledby="condition-title">
+              <div className="account-condition-heading">
+                <div><span>{selectedAccount.accountNumber} · {selectedAccount.currency}</span><h2 id="condition-title">{selectedAccount.customerName}</h2></div>
+                <strong>{money(selectedAccount.currency, String(Number(selectedAccount.creditLimit) - Number(selectedAccount.originalOutstanding)))} disponible</strong>
+              </div>
+              {condition ? <ConditionDetails condition={condition} /> : <p className="empty-state">Esta cuenta todavía no tiene una condición crediticia vigente.</p>}
+            </section>
+          )}
+        </div>
+
+        {showForm && canManageAccounts && (
+          <aside className="product-drawer" aria-label="Nueva cuenta corriente">
+            <div className="drawer-heading"><div><p className="folio">CRÉDITO</p><h2>Nueva cuenta</h2></div><button className="icon-button" type="button" aria-label="Cerrar formulario" onClick={() => { resetForm(); setShowForm(false); }}>×</button></div>
+            <form className="product-form account-form" onSubmit={saveAccount} noValidate>
+              <label htmlFor="account-customer">Cliente</label>
+              <select id="account-customer" value={customerId} onChange={(event) => setCustomerId(event.target.value)}><option value="">Seleccione un cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.fullName} · {client.documentNumber}</option>)}</select>
+              <label htmlFor="account-number">Número de cuenta</label><input id="account-number" value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} />
+              <label htmlFor="credit-limit">Límite de crédito</label><input id="credit-limit" inputMode="decimal" value={creditLimit} onChange={(event) => setCreditLimit(event.target.value)} />
+              <div className="form-divider"><span>Condición inicial</span></div>
+              <div className="form-pair"><label htmlFor="compensatory-rate">Tasa compensatoria<input id="compensatory-rate" inputMode="decimal" value={compensatoryRate} onChange={(event) => setCompensatoryRate(event.target.value)} /></label><label htmlFor="late-rate">Tasa moratoria<input id="late-rate" inputMode="decimal" value={lateRate} onChange={(event) => setLateRate(event.target.value)} /></label></div>
+              <p className="field-help">Las tasas se ingresan por unidad: 0.24 equivale a 24 % efectiva anual.</p>
+              <div className="form-pair"><label htmlFor="billing-day">Día de corte<input id="billing-day" type="number" min="1" max="30" value={billingDay} onChange={(event) => setBillingDay(event.target.value)} /></label><label htmlFor="due-day">Día de vencimiento<input id="due-day" type="number" min="1" max="30" value={dueDay} onChange={(event) => setDueDay(event.target.value)} /></label></div>
+              <div className="form-pair"><label htmlFor="max-installments">Máximo de cuotas<input id="max-installments" type="number" min="1" max="120" value={maxInstallments} onChange={(event) => setMaxInstallments(event.target.value)} /></label><label htmlFor="grace-months">Meses de gracia<input id="grace-months" type="number" min="0" max="24" value={graceMonths} onChange={(event) => setGraceMonths(event.target.value)} /></label></div>
+              <label htmlFor="valid-from">Vigente desde</label><input id="valid-from" type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} />
+              {error && <Alert severity="error">{error}</Alert>}
+              <div className="drawer-actions"><button className="secondary-button" type="button" onClick={() => { resetForm(); setShowForm(false); }}>Cancelar</button><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Creando…' : 'Crear cuenta'}</button></div>
+            </form>
+          </aside>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ConditionDetails({ condition }: { condition: CreditConditionView }) {
+  return (
+    <div className="condition-grid">
+      <div><span>Tasa compensatoria</span><strong>{rateAsPercentage(condition.compensatoryRate)}</strong><small>{rateKindLabel(condition.compensatoryRateKind)}</small></div>
+      <div><span>Tasa moratoria</span><strong>{rateAsPercentage(condition.lateRate)}</strong><small>{rateKindLabel(condition.lateRateKind)}</small></div>
+      <div><span>Ciclo de pago</span><strong>Corte {condition.billingDay} · Pago {condition.dueDay}</strong><small>Mes comercial</small></div>
+      <div><span>Plan permitido</span><strong>Máximo {condition.maxInstallments} cuotas</strong><small>{condition.graceMonths} meses de gracia total</small></div>
+      <div><span>Vigencia</span><strong>Desde {commercialDate(condition.validFrom)}</strong><small>Versión {condition.version}</small></div>
+    </div>
+  );
+}
+
+function PaymentPlans({ api, access, accounts }: { api: ApiClient; access: StoreAccess; accounts: AccountView[] }) {
+  const [accountId, setAccountId] = useState('');
+  const [schedule, setSchedule] = useState<ScheduleItemView[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const scheduleRequest = useRef(0);
+  const selectedAccount = accounts.find((account) => account.id === accountId);
+
+  useEffect(() => {
+    const requestId = ++scheduleRequest.current;
+    setSchedule([]);
+    setError('');
+    if (!accountId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    void api.getSchedule(accountId, access.storeId)
+      .then((nextSchedule) => {
+        if (scheduleRequest.current === requestId) setSchedule(nextSchedule);
+      })
+      .catch((reason: unknown) => {
+        if (scheduleRequest.current === requestId) {
+          setError(reason instanceof Error ? reason.message : 'No fue posible consultar el cronograma.');
+        }
+      })
+      .finally(() => {
+        if (scheduleRequest.current === requestId) setLoading(false);
+      });
+  }, [access.storeId, accountId, api]);
+
+  const nextPending = schedule.find((item) => item.status === 'PENDING' || item.status === 'OVERDUE');
+
+  return (
+    <section className="schedule-page">
+      <div className="page-lead"><p>Consulta el plan francés y las obligaciones calculadas por el motor financiero.</p></div>
+      <section className="schedule-selector">
+        <label htmlFor="schedule-account">Cuenta del cliente</label>
+        <select id="schedule-account" value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Seleccione una cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.customerName} · {account.accountNumber}</option>)}</select>
+      </section>
+
+      {selectedAccount && (
+        <section className="metric-strip schedule-metrics" aria-label="Resumen del plan de pago">
+          <article><span>Límite de crédito</span><strong>{money(selectedAccount.currency, selectedAccount.creditLimit)}</strong></article>
+          <article><span>Capital original pendiente</span><strong>{money(selectedAccount.currency, selectedAccount.originalOutstanding)}</strong></article>
+          <article><span>Obligaciones del plan</span><strong>{schedule.length}</strong></article>
+          <article><span>Próximo vencimiento</span><strong className="store-name">{nextPending ? commercialDate(nextPending.dueDate) : 'Sin pendientes'}</strong></article>
+        </section>
+      )}
+
+      {error && <Alert severity="error">{error}</Alert>}
+      <section className="catalog-panel schedule-panel" aria-labelledby="schedule-title">
+        <div className="catalog-panel-heading"><div><p className="folio">CRONOGRAMA OFICIAL</p><h2 id="schedule-title">Plan de pagos</h2></div><span>{loading ? 'Consultando…' : `${schedule.length} obligaciones`}</span></div>
+        {!accountId ? <p className="empty-state schedule-empty">Seleccione una cuenta para consultar su cronograma.</p> : loading ? <div className="schedule-loading"><CircularProgress size={24} /><span>Consultando obligaciones…</span></div> : schedule.length === 0 ? <p className="empty-state schedule-empty">La cuenta no tiene obligaciones en cuotas.</p> : (
+          <div className="table-wrapper"><table className="schedule-table" aria-label="Cronograma de pagos"><thead><tr><th>Cuota</th><th>Vencimiento</th><th>Saldo inicial</th><th>Interés</th><th>Capital</th><th>Importe exigible</th><th>Pagado</th><th>Estado</th></tr></thead><tbody>{schedule.map((item) => { const status = obligationStatus(item.status); return <tr key={item.id}><td>{item.installmentNumber}</td><td>{commercialDate(item.dueDate)}</td><td>{money(item.currency, item.openingBalance)}</td><td>{money(item.currency, item.compensatoryInterest)}</td><td>{money(item.currency, item.principalDue)}</td><td className="money-cell">{money(item.currency, item.amountDue)}</td><td>{money(item.currency, item.paidAmount)}</td><td><span className={`status-pill ${status.tone}`}>{status.label}</span></td></tr>; })}</tbody></table></div>
+        )}
+      </section>
+      <p className="audit-note">Las cuotas, intereses y fechas provienen de la API. El frontend no reconstruye el plan financiero.</p>
+    </section>
+  );
+}
+
 function BusinessWorkspace({
   api,
   profile,
@@ -1012,6 +1304,14 @@ function BusinessWorkspace({
   const [accounts, setAccounts] = useState<AccountView[]>([]);
   const [products, setProducts] = useState<ProductView[]>([]);
   const [clients, setClients] = useState<ClientView[]>([]);
+
+  async function refreshAccounts() {
+    try {
+      setAccounts(await api.listAccounts(access.storeId));
+    } catch {
+      // La compra ya fue aceptada: se conserva el último saldo visible si falla la recarga.
+    }
+  }
 
   useEffect(() => {
     void Promise.all([
@@ -1065,8 +1365,25 @@ function BusinessWorkspace({
         access={access}
         accounts={accounts}
         products={products}
+        onPurchaseSaved={refreshAccounts}
       />
     );
+  }
+
+  if (activeSection === 'Cuentas corrientes') {
+    return (
+      <AccountManagement
+        api={api}
+        access={access}
+        clients={clients}
+        accounts={accounts}
+        setAccounts={setAccounts}
+      />
+    );
+  }
+
+  if (activeSection === 'Planes de pago') {
+    return <PaymentPlans api={api} access={access} accounts={accounts} />;
   }
 
   return (
@@ -1103,14 +1420,18 @@ function BusinessArea({
   onLogout: () => void;
 }) {
   const [activeSection, setActiveSection] = useState('Panel del negocio');
-  const availableNavigation = ['Panel del negocio', 'Productos y servicios', 'Clientes', 'Registrar compra'];
+  const availableNavigation = ['Panel del negocio', 'Productos y servicios', 'Clientes', 'Registrar compra', 'Cuentas corrientes', 'Planes de pago'];
   const title = activeSection === 'Productos y servicios'
     ? 'Productos y servicios'
     : activeSection === 'Clientes'
       ? 'Gestión de clientes'
       : activeSection === 'Registrar compra'
         ? 'Registrar compra'
-        : 'Mesa de crédito';
+        : activeSection === 'Cuentas corrientes'
+          ? 'Cuentas corrientes'
+          : activeSection === 'Planes de pago'
+            ? 'Planes de pago'
+            : 'Mesa de crédito';
 
   return (
     <WorkspaceShell

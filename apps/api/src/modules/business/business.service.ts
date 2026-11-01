@@ -158,18 +158,40 @@ export class BusinessService {
   async listAccounts(storeId: string) {
     const accounts = await this.prisma.creditAccount.findMany({
       where: { storeId, active: true },
-      include: { customer: { select: { fullName: true } } },
+      include: {
+        customer: { select: { fullName: true } },
+        conditions: { orderBy: { version: 'desc' }, take: 1 },
+      },
       orderBy: { accountNumber: 'asc' },
     });
-    return accounts.map((account) => ({
-      id: account.id,
-      accountNumber: account.accountNumber,
-      customerId: account.customerId,
-      customerName: account.customer.fullName,
-      currency: account.currency,
-      creditLimit: account.creditLimit.toFixed(2),
-      originalOutstanding: account.originalOutstanding.toFixed(2),
-    }));
+    return accounts.map((account) => {
+      const currentCondition = account.conditions[0];
+      return {
+        id: account.id,
+        accountNumber: account.accountNumber,
+        customerId: account.customerId,
+        customerName: account.customer.fullName,
+        currency: account.currency,
+        creditLimit: account.creditLimit.toFixed(2),
+        originalOutstanding: account.originalOutstanding.toFixed(2),
+        ...(currentCondition ? {
+          currentCondition: {
+            id: currentCondition.id,
+            version: currentCondition.version,
+            compensatoryRateKind: currentCondition.compensatoryRateKind,
+            compensatoryRate: currentCondition.compensatoryRate.toFixed(12),
+            lateRateKind: currentCondition.lateRateKind,
+            lateRate: currentCondition.lateRate.toFixed(12),
+            billingDay: currentCondition.billingDay,
+            dueDay: currentCondition.dueDay,
+            maxInstallments: currentCondition.maxInstallments,
+            graceMonths: currentCondition.graceMonths,
+            validFrom: currentCondition.validFrom.toISOString(),
+            validUntil: currentCondition.validUntil?.toISOString() ?? null,
+          },
+        } : {}),
+      };
+    });
   }
 
   async createAccount(
@@ -179,6 +201,17 @@ export class BusinessService {
       accountNumber: string;
       currency: string;
       creditLimit: string;
+      initialCondition?: {
+        compensatoryRateKind: 'EFFECTIVE_ANNUAL' | 'NOMINAL_ANNUAL';
+        compensatoryRate: string;
+        lateRateKind: 'EFFECTIVE_ANNUAL' | 'NOMINAL_ANNUAL';
+        lateRate: string;
+        billingDay: number;
+        dueDay: number;
+        maxInstallments: number;
+        graceMonths: number;
+        validFrom: string;
+      };
     },
     actorId: string,
   ) {
@@ -187,9 +220,21 @@ export class BusinessService {
         where: { id_storeId: { id: input.customerId, storeId } },
       });
       if (!customer?.active) throw new NotFoundException('Cliente no encontrado.');
+      const { initialCondition, ...accountInput } = input;
       const account = await transaction.creditAccount.create({
-        data: { storeId, ...input },
+        data: { storeId, ...accountInput },
       });
+      const condition = initialCondition
+        ? await transaction.creditCondition.create({
+          data: {
+            storeId,
+            accountId: account.id,
+            ...initialCondition,
+            validFrom: new Date(initialCondition.validFrom),
+            version: 1,
+          },
+        })
+        : null;
       await transaction.auditEvent.create({
         data: {
           storeId,
@@ -199,6 +244,17 @@ export class BusinessService {
           entityId: account.id,
         },
       });
+      if (condition) {
+        await transaction.auditEvent.create({
+          data: {
+            storeId,
+            userId: actorId,
+            event: 'CREDIT_CONDITION_VERSIONED',
+            entity: 'CONDICION_CREDITICIA',
+            entityId: condition.id,
+          },
+        });
+      }
       return {
         id: account.id,
         accountNumber: account.accountNumber,
@@ -206,6 +262,15 @@ export class BusinessService {
         currency: account.currency,
         creditLimit: account.creditLimit.toFixed(2),
         originalOutstanding: account.originalOutstanding.toFixed(2),
+        ...(condition ? {
+          currentCondition: {
+            ...condition,
+            compensatoryRate: condition.compensatoryRate.toFixed(12),
+            lateRate: condition.lateRate.toFixed(12),
+            validFrom: condition.validFrom.toISOString(),
+            validUntil: condition.validUntil?.toISOString() ?? null,
+          },
+        } : {}),
       };
     });
   }

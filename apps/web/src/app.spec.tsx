@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { App } from './app';
+import { App, localDateInTimeZone } from './app';
 
 function makeApi(profile: unknown) {
   return {
@@ -56,7 +56,53 @@ function makeApi(profile: unknown) {
       currency: 'PEN',
       imageUrl: 'https://images.example.com/cafetera.jpg',
     }),
-    listAccounts: vi.fn().mockResolvedValue([{ id: 'account-1', accountNumber: 'CC-001', customerId: 'client-1', customerName: 'Maria Demo', creditLimit: '1000.00', originalOutstanding: '100.00', currency: 'PEN' }]),
+    listAccounts: vi.fn().mockResolvedValue([{
+      id: 'account-1',
+      accountNumber: 'CC-001',
+      customerId: 'client-1',
+      customerName: 'Maria Demo',
+      creditLimit: '1000.00',
+      originalOutstanding: '100.00',
+      currency: 'PEN',
+      currentCondition: {
+        id: 'condition-1',
+        version: 1,
+        compensatoryRateKind: 'EFFECTIVE_ANNUAL',
+        compensatoryRate: '0.240000000000',
+        lateRateKind: 'NOMINAL_ANNUAL',
+        lateRate: '0.360000000000',
+        billingDay: 20,
+        dueDay: 28,
+        maxInstallments: 6,
+        graceMonths: 0,
+        validFrom: '2026-10-01T05:00:00.000Z',
+        validUntil: null,
+      },
+    }]),
+    createAccount: vi.fn().mockResolvedValue({
+      id: 'account-2', accountNumber: 'CC-002', customerId: 'client-1', creditLimit: '2000.00', originalOutstanding: '0.00', currency: 'PEN',
+      currentCondition: { id: 'condition-2', version: 1, compensatoryRateKind: 'EFFECTIVE_ANNUAL', compensatoryRate: '0.240000000000', lateRateKind: 'EFFECTIVE_ANNUAL', lateRate: '0.360000000000', billingDay: 20, dueDay: 28, maxInstallments: 6, graceMonths: 0, validFrom: '2026-11-01T05:00:00.000Z', validUntil: null },
+    }),
+    addCreditCondition: vi.fn().mockResolvedValue({
+      id: 'condition-2',
+      version: 1,
+      compensatoryRateKind: 'EFFECTIVE_ANNUAL',
+      compensatoryRate: '0.240000000000',
+      lateRateKind: 'EFFECTIVE_ANNUAL',
+      lateRate: '0.360000000000',
+      billingDay: 20,
+      dueDay: 28,
+      maxInstallments: 6,
+      graceMonths: 0,
+      validFrom: '2026-11-01T05:00:00.000Z',
+      validUntil: null,
+    }),
+    getSchedule: vi.fn().mockResolvedValue([
+      { id: 'obligation-voided', purchaseId: 'purchase-0', installmentNumber: 1, dueDate: '2026-09-28', openingBalance: '90.00', principalDue: '90.00', compensatoryInterest: '0.00', lateInterest: '0.00', amountDue: '90.00', paidAmount: '0.00', currency: 'PEN', status: 'VOIDED' },
+      { id: 'obligation-1', purchaseId: 'purchase-1', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '300.00', principalDue: '95.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
+      { id: 'obligation-2', purchaseId: 'purchase-1', installmentNumber: 2, dueDate: '2026-12-28', openingBalance: '205.00', principalDue: '98.00', compensatoryInterest: '2.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
+      { id: 'obligation-3', purchaseId: 'purchase-2', installmentNumber: 1, dueDate: '2026-10-28', openingBalance: '50.00', principalDue: '50.00', compensatoryInterest: '0.00', lateInterest: '1.00', amountDue: '51.00', paidAmount: '0.00', currency: 'PEN', status: 'OVERDUE' },
+    ]),
     createPurchase: vi.fn().mockResolvedValue({ id: 'purchase-1', total: '100.00' }),
     getMyAccounts: vi.fn().mockResolvedValue([{ id: 'account-1', storeName: 'Bodega Demo', accountNumber: 'CC-001', originalOutstanding: '100.00', creditLimit: '1000.00', currency: 'PEN' }]),
     getMyStatements: vi.fn().mockResolvedValue([]),
@@ -69,6 +115,12 @@ async function login() {
   fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'DemoSegura#2026' } });
   fireEvent.click(screen.getByRole('button', { name: /iniciar sesión/i }));
 }
+
+describe('local commercial dates', () => {
+  it('uses the Lima calendar day instead of UTC', () => {
+    expect(localDateInTimeZone(new Date('2026-11-02T00:30:00.000Z'), 'America/Lima')).toBe('2026-11-01');
+  });
+});
 
 describe('App por roles', () => {
   beforeEach(() => localStorage.clear());
@@ -86,7 +138,7 @@ describe('App por roles', () => {
     render(<App api={api as never} />);
     await login();
     expect(await screen.findByRole('heading', { name: /control de plataforma/i })).toBeVisible();
-    expect(api.listStores).toHaveBeenCalled();
+    await waitFor(() => expect(api.listStores).toHaveBeenCalled());
     expect(screen.getByText(/tiendas registradas/i)).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: /nueva tienda/i }));
@@ -116,6 +168,7 @@ describe('App por roles', () => {
     const purchaseForm = screen.getByRole('form', { name: /registro de compra/i });
     fireEvent.click(within(purchaseForm).getByRole('button', { name: /registrar compra/i }));
     await waitFor(() => expect(api.createPurchase).toHaveBeenCalledWith('store-1', expect.objectContaining({ accountId: 'account-1', currency: 'PEN', items: [{ productId: 'product-1', quantity: '1' }] })));
+    await waitFor(() => expect(api.listAccounts).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/compra registrada por s\/ 100.00/i)).toBeVisible();
   });
 
@@ -237,6 +290,89 @@ describe('App por roles', () => {
     }));
     expect(await screen.findByText('Cliente guardado correctamente.')).toBeVisible();
     expect(within(screen.getByRole('table', { name: 'Clientes y cuentas' })).getByRole('button', { name: 'Ana Torres' })).toBeVisible();
+  });
+
+  it('creates a credit account together with its initial financial condition', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    render(<App api={api as never} />);
+    await login();
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Cuentas corrientes' }));
+
+    expect(await screen.findByRole('heading', { name: 'Cuentas corrientes', level: 1 })).toBeVisible();
+    expect(screen.getByText('Nominal anual')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /nueva cuenta/i }));
+    fireEvent.change(screen.getByLabelText(/^cliente$/i), { target: { value: 'client-1' } });
+    fireEvent.change(screen.getByLabelText(/número de cuenta/i), { target: { value: 'CC-002' } });
+    fireEvent.change(screen.getByLabelText(/límite de crédito/i), { target: { value: '2000.00' } });
+    fireEvent.change(screen.getByLabelText(/tasa compensatoria/i), { target: { value: '0.24' } });
+    fireEvent.change(screen.getByLabelText(/tasa moratoria/i), { target: { value: '0.36' } });
+    fireEvent.change(screen.getByLabelText(/día de corte/i), { target: { value: '20' } });
+    fireEvent.change(screen.getByLabelText(/día de vencimiento/i), { target: { value: '28' } });
+    fireEvent.change(screen.getByLabelText(/máximo de cuotas/i), { target: { value: '6' } });
+    fireEvent.change(screen.getByLabelText(/meses de gracia/i), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText(/vigente desde/i), { target: { value: '2026-11-01' } });
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+
+    await waitFor(() => expect(api.createAccount).toHaveBeenCalledWith('store-1', {
+      customerId: 'client-1',
+      accountNumber: 'CC-002',
+      currency: 'PEN',
+      creditLimit: '2000.00',
+      initialCondition: {
+        compensatoryRateKind: 'EFFECTIVE_ANNUAL',
+        compensatoryRate: '0.24',
+        lateRateKind: 'EFFECTIVE_ANNUAL',
+        lateRate: '0.36',
+        billingDay: 20,
+        dueDay: 28,
+        maxInstallments: 6,
+        graceMonths: 0,
+        validFrom: '2026-11-01T00:00:00-05:00',
+      },
+    }));
+    expect(api.addCreditCondition).not.toHaveBeenCalled();
+    expect(await screen.findByText(/cuenta y condición crediticia guardadas/i)).toBeVisible();
+  });
+
+  it('shows the official installment schedule returned by the API', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    render(<App api={api as never} />);
+    await login();
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Planes de pago' }));
+
+    expect(await screen.findByRole('heading', { name: 'Planes de pago' })).toBeVisible();
+    fireEvent.change(screen.getByLabelText(/cuenta del cliente/i), { target: { value: 'account-1' } });
+    await waitFor(() => expect(api.getSchedule).toHaveBeenCalledWith('account-1', 'store-1'));
+    const schedule = await screen.findByRole('table', { name: /cronograma de pagos/i });
+    expect(within(schedule).getByText('28/11/2026')).toBeVisible();
+    expect(within(schedule).getAllByText('S/ 100.00')).toHaveLength(2);
+    expect(within(schedule).getAllByText('Pendiente')).toHaveLength(2);
+    expect(within(schedule).getByText('Vencida')).toBeVisible();
+    expect(within(schedule).getByText('Anulada')).toBeVisible();
+    expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('28/11/2026')).toBeVisible();
+  });
+
+  it('clears an old schedule while a different account is loading', async () => {
+    let finishSecond: ((value: unknown[]) => void) | undefined;
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    const accounts = await api.listAccounts();
+    api.listAccounts.mockResolvedValue([...accounts, { ...accounts[0], id: 'account-2', accountNumber: 'CC-002', customerName: 'Ana Torres' }]);
+    api.getSchedule.mockImplementation((accountId: string) => accountId === 'account-1'
+      ? Promise.resolve([{ id: 'old-row', purchaseId: 'purchase-1', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '100.00', principalDue: '95.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' }])
+      : new Promise((resolve) => { finishSecond = resolve; }));
+    render(<App api={api as never} />);
+    await login();
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Planes de pago' }));
+    const selector = screen.getByLabelText(/cuenta del cliente/i);
+    fireEvent.change(selector, { target: { value: 'account-1' } });
+    await waitFor(() => expect(screen.getAllByText('28/11/2026')).toHaveLength(2));
+
+    fireEvent.change(selector, { target: { value: 'account-2' } });
+    await waitFor(() => expect(screen.queryAllByText('28/11/2026')).toHaveLength(0));
+    finishSecond?.([]);
   });
 
   it('does not submit a purchase command twice while the first request is pending', async () => {

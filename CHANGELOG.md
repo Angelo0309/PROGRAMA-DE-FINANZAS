@@ -12,4 +12,6 @@
 - Catalogo web del negocio con busqueda, vista previa de imagen y alta de productos.
 - Directorio web de clientes con saldos por cuenta y registro de nuevas identidades.
 - Pantalla guiada de compras con multiples conceptos, imagenes y modalidades de fin de mes o cuotas.
+- Gestion web de cuentas corrientes con limites, saldos y condiciones crediticias vigentes.
+- Consulta web del cronograma oficial de cuotas, vencimientos, intereses y estados.
 - Prisma, migracion, semillas ficticias, Docker, CI y guias de despliegue.
