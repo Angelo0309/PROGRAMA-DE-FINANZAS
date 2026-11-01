@@ -42,6 +42,7 @@ export interface CreatePurchaseInput {
 export interface CreateCutInput {
   storeId: string;
   accountId: string;
+  operatorUserId?: string;
   idempotencyKey: string;
   cutAt: string;
 }
@@ -184,6 +185,13 @@ export class CreditOperationsService {
         obligations,
       };
       await transaction.savePurchase(purchase);
+      await transaction.recordAudit({
+        storeId: input.storeId,
+        userId: input.operatorUserId,
+        event: 'PURCHASE_CREATED',
+        entity: 'COMPRA',
+        entityId: purchase.id,
+      });
       return purchase;
     });
   }
@@ -216,6 +224,13 @@ export class CreditOperationsService {
         obligationIds: obligations.map((item) => item.id),
       };
       await transaction.saveCut(cut);
+      await transaction.recordAudit({
+        storeId: input.storeId,
+        userId: input.operatorUserId ?? null,
+        event: 'CUT_CREATED',
+        entity: 'CORTE',
+        entityId: cut.id,
+      });
       return cut;
     });
   }
@@ -278,6 +293,13 @@ export class CreditOperationsService {
         allocations,
       };
       await transaction.savePayment(payment);
+      await transaction.recordAudit({
+        storeId: input.storeId,
+        userId: input.operatorUserId,
+        event: 'PAYMENT_CREATED',
+        entity: 'PAGO',
+        entityId: payment.id,
+      });
       return payment;
     });
   }

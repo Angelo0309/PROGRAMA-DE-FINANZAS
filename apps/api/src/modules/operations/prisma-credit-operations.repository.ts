@@ -10,6 +10,7 @@ import {
   type CreditOperationsRepository,
   type CreditOperationsTransaction,
   type CutRecord,
+  type FinancialAuditRecord,
   type ObligationRecord,
   type PaymentRecord,
   type ProductSnapshot,
@@ -426,6 +427,18 @@ class PrismaCreditOperationsTransaction implements CreditOperationsTransaction {
         originalOutstanding: remaining.abs().lte('0.000000000001')
           ? '0'
           : Decimal.max(0, remaining).toString(),
+      },
+    });
+  }
+
+  async recordAudit(event: FinancialAuditRecord): Promise<void> {
+    await this.transaction.auditEvent.create({
+      data: {
+        storeId: event.storeId,
+        userId: event.userId,
+        event: event.event,
+        entity: event.entity,
+        entityId: event.entityId,
       },
     });
   }

@@ -105,6 +105,14 @@ export interface PaymentRecord {
   allocations: PaymentAllocation[];
 }
 
+export interface FinancialAuditRecord {
+  storeId: string;
+  userId: string | null;
+  event: 'PURCHASE_CREATED' | 'CUT_CREATED' | 'PAYMENT_CREATED';
+  entity: 'COMPRA' | 'CORTE' | 'PAGO';
+  entityId: string;
+}
+
 export interface CreditOperationsTransaction {
   findPurchaseByIdempotency(
     storeId: string,
@@ -126,6 +134,7 @@ export interface CreditOperationsTransaction {
   savePurchase(purchase: PurchaseRecord): Promise<void>;
   saveCut(cut: CutRecord): Promise<void>;
   savePayment(payment: PaymentRecord): Promise<void>;
+  recordAudit(event: FinancialAuditRecord): Promise<void>;
 }
 
 export interface CreditOperationsRepository {

@@ -50,6 +50,13 @@ class MemoryOperationsRepository
   purchases: PurchaseRecord[] = [];
   cuts: CutRecord[] = [];
   payments: PaymentRecord[] = [];
+  auditEvents: Array<{
+    storeId: string;
+    userId: string | null;
+    event: string;
+    entity: string;
+    entityId: string;
+  }> = [];
   transientFailures = 0;
   attempts = 0;
 
@@ -124,6 +131,15 @@ class MemoryOperationsRepository
         ? '0'
         : remaining.toString();
     }
+  }
+  async recordAudit(event: {
+    storeId: string;
+    userId: string | null;
+    event: string;
+    entity: string;
+    entityId: string;
+  }) {
+    this.auditEvents.push(event);
   }
 }
 
@@ -215,6 +231,36 @@ describe('CreditOperationsService', () => {
 
     expect(cut.obligationIds).toEqual([]);
     expect(cut.totalDue).toBe('0.00');
+  });
+
+  it('audits purchases, cuts and payments with their actor when available', async () => {
+    const purchase = await service.createPurchase({
+      ...basePurchase,
+      idempotencyKey: 'audited-purchase',
+    });
+    await service.createCut({
+      storeId: 'store-1',
+      accountId: 'account-1',
+      operatorUserId: 'operator-1',
+      idempotencyKey: 'audited-cut',
+      cutAt: purchase.assignedCutAt,
+    });
+    const obligation = purchase.obligations[0]!;
+    await service.createPayment({
+      storeId: 'store-1',
+      accountId: 'account-1',
+      operatorUserId: 'operator-1',
+      idempotencyKey: 'audited-payment',
+      paidAt: `${obligation.dueDate}T12:00:00-05:00`,
+      currency: 'PEN',
+      amount: new Decimal(obligation.amountDue).toFixed(2),
+    });
+
+    expect(repository.auditEvents).toEqual([
+      expect.objectContaining({ event: 'PURCHASE_CREATED', entityId: purchase.id }),
+      expect.objectContaining({ event: 'CUT_CREATED', userId: 'operator-1' }),
+      expect.objectContaining({ event: 'PAYMENT_CREATED', userId: 'operator-1' }),
+    ]);
   });
 
   it('accepts only an exact full payment and allocates mora, interest, then capital', async () => {

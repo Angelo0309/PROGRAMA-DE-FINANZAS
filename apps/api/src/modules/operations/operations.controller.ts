@@ -100,11 +100,13 @@ export class OperationsController {
   createCut(
     @Param('accountId') accountId: string,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: AuthenticatedRequest,
     @Body() body: unknown,
   ) {
     return this.service.createCut({
       ...parse(cutSchema, body),
       accountId,
+      operatorUserId: request.user.sub,
       idempotencyKey: requireIdempotencyKey(idempotencyKey),
     });
   }
