@@ -773,6 +773,231 @@ function ClientManagement({
   );
 }
 
+type PurchaseLine = {
+  productId: string;
+  quantity: string;
+};
+
+function PurchaseRegistration({
+  api,
+  access,
+  accounts,
+  products,
+}: {
+  api: ApiClient;
+  access: StoreAccess;
+  accounts: AccountView[];
+  products: ProductView[];
+}) {
+  const [accountId, setAccountId] = useState('');
+  const [productId, setProductId] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  const [mode, setMode] = useState<'END_OF_MONTH' | 'INSTALLMENTS'>('END_OF_MONTH');
+  const [installmentCount, setInstallmentCount] = useState('2');
+  const [items, setItems] = useState<PurchaseLine[]>([]);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const purchaseKey = useRef<string | null>(null);
+  const purchaseInFlight = useRef(false);
+  const selectedAccount = accounts.find((account) => account.id === accountId);
+  const selectedProduct = products.find((product) => product.id === productId);
+
+  function addItem() {
+    if (!selectedProduct || !/^\d+(?:\.\d+)?$/.test(quantity) || Number(quantity) <= 0) {
+      setError('Seleccione un producto y escriba una cantidad válida.');
+      return;
+    }
+    setItems((current) => {
+      const existing = current.some((item) => item.productId === selectedProduct.id);
+      if (existing) {
+        return current.map((item) => item.productId === selectedProduct.id
+          ? { ...item, quantity }
+          : item);
+      }
+      return [...current, { productId: selectedProduct.id, quantity }];
+    });
+    setProductId('');
+    setQuantity('1');
+    setError('');
+    setNotice('');
+  }
+
+  function clearPurchase() {
+    setAccountId('');
+    setProductId('');
+    setQuantity('1');
+    setMode('END_OF_MONTH');
+    setInstallmentCount('2');
+    setItems([]);
+    setError('');
+    setNotice('');
+    purchaseKey.current = null;
+  }
+
+  async function submitPurchase(event: FormEvent) {
+    event.preventDefault();
+    if (purchaseInFlight.current) return;
+    if (!accountId || items.length === 0) {
+      setError('Seleccione una cuenta y agregue al menos un producto al detalle.');
+      return;
+    }
+    if (mode === 'INSTALLMENTS' && (!/^\d+$/.test(installmentCount) || Number(installmentCount) < 1)) {
+      setError('Ingrese un número de cuotas válido.');
+      return;
+    }
+
+    setError('');
+    setNotice('');
+    purchaseInFlight.current = true;
+    setSubmitting(true);
+    const idempotencyKey = purchaseKey.current ?? crypto.randomUUID();
+    purchaseKey.current = idempotencyKey;
+    try {
+      const purchase = await api.createPurchase(access.storeId, {
+        accountId,
+        purchasedAt: new Date().toISOString(),
+        currency: access.currency,
+        mode,
+        ...(mode === 'INSTALLMENTS' ? { installmentCount: Number(installmentCount) } : {}),
+        items,
+        idempotencyKey,
+      });
+      setNotice(`Compra registrada por ${money(access.currency, purchase.total)}.`);
+      setItems([]);
+      setProductId('');
+      setQuantity('1');
+      purchaseKey.current = null;
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'No fue posible registrar la compra.');
+    } finally {
+      purchaseInFlight.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="purchase-page">
+      <div className="page-lead">
+        <p>Registra los consumos del cliente. El límite, la condición vigente, los intereses y el importe oficial se validan en el servidor.</p>
+      </div>
+
+      <form className="purchase-registration" aria-label="Registro de compra" onSubmit={submitPurchase} noValidate>
+        <div className="purchase-main-grid">
+          <section className="purchase-panel" aria-labelledby="purchase-data-title">
+            <div className="purchase-panel-heading">
+              <div><p className="folio">PASO 01</p><h2 id="purchase-data-title">Datos de la operación</h2></div>
+              <span>Cuenta y conceptos</span>
+            </div>
+            <div className="purchase-fields">
+              <label htmlFor="purchase-account">Cuenta</label>
+              <select id="purchase-account" value={accountId} onChange={(event) => setAccountId(event.target.value)}>
+                <option value="">Seleccione una cuenta</option>
+                {accounts.map((account) => <option key={account.id} value={account.id}>{account.accountNumber} · {account.customerName}</option>)}
+              </select>
+
+              {selectedAccount && (
+                <div className="selected-account-card">
+                  <div><span>Cliente</span><strong>{selectedAccount.customerName}</strong></div>
+                  <div><span>Cuenta</span><strong>{selectedAccount.accountNumber}</strong></div>
+                  <div><span>Disponible referencial</span><strong>{money(selectedAccount.currency, String(Number(selectedAccount.creditLimit) - Number(selectedAccount.originalOutstanding)))}</strong></div>
+                </div>
+              )}
+
+              <label htmlFor="purchase-product">Producto o servicio</label>
+              <select id="purchase-product" value={productId} onChange={(event) => setProductId(event.target.value)}>
+                <option value="">Seleccione un concepto</option>
+                {products.map((product) => <option key={product.id} value={product.id}>{product.name} · {money(product.currency, product.unitPrice)}</option>)}
+              </select>
+
+              {selectedProduct && (
+                <div className="purchase-product-preview">
+                  <ProductImage src={selectedProduct.imageUrl} name={selectedProduct.name} />
+                  <div><strong>{selectedProduct.name}</strong><span>{selectedProduct.sku} · Precio unitario {money(selectedProduct.currency, selectedProduct.unitPrice)}</span></div>
+                </div>
+              )}
+
+              <div className="quantity-row">
+                <label htmlFor="purchase-quantity">Cantidad
+                  <input id="purchase-quantity" inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+                </label>
+                <button className="secondary-button" type="button" onClick={addItem}>+ Agregar al detalle</button>
+              </div>
+            </div>
+          </section>
+
+          <section className="purchase-panel" aria-labelledby="payment-data-title">
+            <div className="purchase-panel-heading">
+              <div><p className="folio">PASO 02</p><h2 id="payment-data-title">Condiciones de pago</h2></div>
+              <span>Según contrato vigente</span>
+            </div>
+            <div className="purchase-fields">
+              <label htmlFor="purchase-mode">Modalidad de pago</label>
+              <select id="purchase-mode" value={mode} onChange={(event) => setMode(event.target.value as 'END_OF_MONTH' | 'INSTALLMENTS')}>
+                <option value="END_OF_MONTH">Pago a fin de mes</option>
+                <option value="INSTALLMENTS">Plan de cuotas</option>
+              </select>
+
+              {mode === 'INSTALLMENTS' && (
+                <>
+                  <label htmlFor="installment-count">Número de cuotas</label>
+                  <input id="installment-count" type="number" min="1" step="1" value={installmentCount} onChange={(event) => setInstallmentCount(event.target.value)} />
+                </>
+              )}
+
+              <div className="server-rule-card">
+                <span className="status-pill ready">Validación automática</span>
+                <h3>El backend conserva el control financiero</h3>
+                <p>Al registrar, la API comprobará el límite disponible, la moneda, el máximo de cuotas y las condiciones vigentes. El total oficial aparecerá únicamente después de esa validación.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section className="purchase-detail-panel" aria-labelledby="purchase-detail-title">
+          <div className="catalog-panel-heading">
+            <div><p className="folio">PASO 03</p><h2 id="purchase-detail-title">Detalle de la operación</h2></div>
+            <span>{items.length} {items.length === 1 ? 'concepto agregado' : 'conceptos agregados'}</span>
+          </div>
+          {items.length === 0 ? (
+            <p className="empty-state purchase-empty">Seleccione un producto y agréguelo para construir el detalle de compra.</p>
+          ) : (
+            <div className="table-wrapper">
+              <table className="purchase-detail-table" aria-label="Detalle de productos de la compra">
+                <thead><tr><th>Producto o servicio</th><th>Cantidad</th><th>Precio unitario</th><th>Acción</th></tr></thead>
+                <tbody>
+                  {items.map((item) => {
+                    const product = products.find((candidate) => candidate.id === item.productId);
+                    if (!product) return null;
+                    return (
+                      <tr key={item.productId}>
+                        <td><div className="product-cell"><ProductImage src={product.imageUrl} name={product.name} /><div><strong>{product.name}</strong><span>{product.sku}</span></div></div></td>
+                        <td>{item.quantity}</td>
+                        <td className="money-cell">{money(product.currency, product.unitPrice)}</td>
+                        <td><button className="table-action" type="button" onClick={() => setItems((current) => current.filter((line) => line.productId !== item.productId))}>Quitar</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {error && <Alert severity="error">{error}</Alert>}
+        {notice && <Alert severity="success">{notice}</Alert>}
+        <div className="purchase-actions">
+          <p>Los importes se envían y reciben como cadenas decimales, sin cálculos oficiales en el navegador.</p>
+          <div>
+            <button className="secondary-button" type="button" onClick={clearPurchase} disabled={submitting}>Limpiar</button>
+            <button className="primary-button" type="submit" disabled={submitting || items.length === 0}>{submitting ? 'Registrando compra…' : 'Registrar compra'}</button>
+          </div>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function BusinessWorkspace({
   api,
   profile,
@@ -787,14 +1012,6 @@ function BusinessWorkspace({
   const [accounts, setAccounts] = useState<AccountView[]>([]);
   const [products, setProducts] = useState<ProductView[]>([]);
   const [clients, setClients] = useState<ClientView[]>([]);
-  const [accountId, setAccountId] = useState('');
-  const [productId, setProductId] = useState('');
-  const [quantity, setQuantity] = useState('1');
-  const [notice, setNotice] = useState('');
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const purchaseKey = useRef<string | null>(null);
-  const purchaseInFlight = useRef(false);
 
   useEffect(() => {
     void Promise.all([
@@ -817,38 +1034,6 @@ function BusinessWorkspace({
       ),
     [accounts],
   );
-
-  async function submitPurchase(event: FormEvent) {
-    event.preventDefault();
-    if (purchaseInFlight.current) return;
-    if (!accountId || !productId || !/^\d+(?:\.\d+)?$/.test(quantity)) {
-      setError('Seleccione una cuenta, un producto y una cantidad válida.');
-      return;
-    }
-    setError('');
-    setNotice('');
-    purchaseInFlight.current = true;
-    setSubmitting(true);
-    const idempotencyKey = purchaseKey.current ?? crypto.randomUUID();
-    purchaseKey.current = idempotencyKey;
-    try {
-      const purchase = await api.createPurchase(access.storeId, {
-        accountId,
-        purchasedAt: new Date().toISOString(),
-        currency: access.currency,
-        mode: 'END_OF_MONTH',
-        items: [{ productId, quantity }],
-        idempotencyKey,
-      });
-      setNotice(`Compra registrada por ${money(access.currency, purchase.total)}.`);
-      purchaseKey.current = null;
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'No fue posible registrar la compra.');
-    } finally {
-      purchaseInFlight.current = false;
-      setSubmitting(false);
-    }
-  }
 
   if (activeSection === 'Productos y servicios') {
     return (
@@ -873,6 +1058,17 @@ function BusinessWorkspace({
     );
   }
 
+  if (activeSection === 'Registrar compra') {
+    return (
+      <PurchaseRegistration
+        api={api}
+        access={access}
+        accounts={accounts}
+        products={products}
+      />
+    );
+  }
+
   return (
     <>
       <section className="metric-strip">
@@ -880,42 +1076,16 @@ function BusinessWorkspace({
         <article><span>Crédito disponible</span><strong>{money(access.currency, String(available))}</strong></article>
         <article><span>Tienda</span><strong className="store-name">{access.storeName}</strong></article>
       </section>
-      <div className="two-column-grid">
-        <section className="paper-section">
-          <p className="folio">OPERACIÓN · NUEVA COMPRA</p>
-          <h2>Registrar consumo</h2>
-          <form className="purchase-form" onSubmit={submitPurchase}>
-            <label htmlFor="account">Cuenta</label>
-            <select id="account" value={accountId} onChange={(event) => setAccountId(event.target.value)}>
-              <option value="">Seleccione una cuenta</option>
-              {accounts.map((account) => <option key={account.id} value={account.id}>{account.accountNumber} · {account.customerName}</option>)}
-            </select>
-            <label htmlFor="product">Producto o servicio</label>
-            <select id="product" value={productId} onChange={(event) => setProductId(event.target.value)}>
-              <option value="">Seleccione un concepto</option>
-              {products.map((product) => <option key={product.id} value={product.id}>{product.name} · {money(product.currency, product.unitPrice)}</option>)}
-            </select>
-            <label htmlFor="quantity">Cantidad</label>
-            <input id="quantity" inputMode="decimal" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
-            <p className="field-help">El total, la tasa y la fecha de pago serán calculados por la API.</p>
-            {error && <Alert severity="error">{error}</Alert>}
-            {notice && <Alert severity="success">{notice}</Alert>}
-            <button className="primary-button" type="submit" disabled={submitting}>
-              {submitting ? 'Registrando compra…' : 'Registrar compra'}
-            </button>
-          </form>
-        </section>
-        <section className="paper-section account-list" id="actividad">
-          <p className="folio">CARTERA · CUENTAS</p>
-          <h2>Saldos de capital</h2>
-          {accounts.map((account) => (
-            <article key={account.id}>
-              <div><strong>{account.customerName}</strong><span>{account.accountNumber}</span></div>
-              <strong>{money(account.currency, account.originalOutstanding)}</strong>
-            </article>
-          ))}
-        </section>
-      </div>
+      <section className="paper-section account-list" id="actividad">
+        <p className="folio">CARTERA · CUENTAS</p>
+        <h2>Saldos de capital</h2>
+        {accounts.map((account) => (
+          <article key={account.id}>
+            <div><strong>{account.customerName}</strong><span>{account.accountNumber}</span></div>
+            <strong>{money(account.currency, account.originalOutstanding)}</strong>
+          </article>
+        ))}
+      </section>
       <p className="audit-note">Operador: {profile.displayName}. Cada comando crítico utiliza una clave de idempotencia.</p>
     </>
   );
@@ -933,12 +1103,14 @@ function BusinessArea({
   onLogout: () => void;
 }) {
   const [activeSection, setActiveSection] = useState('Panel del negocio');
-  const availableNavigation = ['Panel del negocio', 'Productos y servicios', 'Clientes'];
+  const availableNavigation = ['Panel del negocio', 'Productos y servicios', 'Clientes', 'Registrar compra'];
   const title = activeSection === 'Productos y servicios'
     ? 'Productos y servicios'
     : activeSection === 'Clientes'
       ? 'Gestión de clientes'
-      : 'Mesa de crédito';
+      : activeSection === 'Registrar compra'
+        ? 'Registrar compra'
+        : 'Mesa de crédito';
 
   return (
     <WorkspaceShell

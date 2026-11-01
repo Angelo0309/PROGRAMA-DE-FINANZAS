@@ -27,17 +27,28 @@ function makeApi(profile: unknown) {
       phone: '988776655',
       address: 'San Miguel',
     }),
-    listProducts: vi.fn().mockResolvedValue([{
-      id: 'product-1',
-      sku: 'PROD-001',
-      name: 'Producto Demo',
-      description: 'Producto de prueba',
-      unitPrice: '100.00',
-      currency: 'PEN',
-      imageUrl: 'https://images.example.com/producto-demo.jpg',
-    }]),
+    listProducts: vi.fn().mockResolvedValue([
+      {
+        id: 'product-1',
+        sku: 'PROD-001',
+        name: 'Producto Demo',
+        description: 'Producto de prueba',
+        unitPrice: '100.00',
+        currency: 'PEN',
+        imageUrl: 'https://images.example.com/producto-demo.jpg',
+      },
+      {
+        id: 'product-2',
+        sku: 'PROD-002',
+        name: 'Audífonos inalámbricos',
+        description: 'Accesorio de audio',
+        unitPrice: '89.90',
+        currency: 'PEN',
+        imageUrl: 'https://images.example.com/audifonos.jpg',
+      },
+    ]),
     createProduct: vi.fn().mockResolvedValue({
-      id: 'product-2',
+      id: 'product-3',
       sku: 'PROD-002',
       name: 'Cafetera compacta',
       description: 'Cafetera para el hogar',
@@ -95,14 +106,55 @@ describe('App por roles', () => {
     expect(within(navigation).getByText('Productos y servicios')).toBeVisible();
     expect(within(navigation).getByText('Registrar compra')).toBeVisible();
     expect(within(navigation).getByText('Reporte de corte')).toBeVisible();
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Registrar compra' }));
+    expect(await screen.findByRole('heading', { name: 'Registrar compra' })).toBeVisible();
     await screen.findByRole('option', { name: /CC-001/i });
     fireEvent.change(screen.getByLabelText(/^cuenta$/i), { target: { value: 'account-1' } });
     fireEvent.change(screen.getByLabelText(/producto o servicio/i), { target: { value: 'product-1' } });
     fireEvent.change(screen.getByLabelText(/cantidad/i), { target: { value: '1' } });
-    const purchaseForm = screen.getByLabelText(/^cuenta$/i).closest('form')!;
+    fireEvent.click(screen.getByRole('button', { name: /agregar al detalle/i }));
+    const purchaseForm = screen.getByRole('form', { name: /registro de compra/i });
     fireEvent.click(within(purchaseForm).getByRole('button', { name: /registrar compra/i }));
     await waitFor(() => expect(api.createPurchase).toHaveBeenCalledWith('store-1', expect.objectContaining({ accountId: 'account-1', currency: 'PEN', items: [{ productId: 'product-1', quantity: '1' }] })));
     expect(await screen.findByText(/compra registrada por s\/ 100.00/i)).toBeVisible();
+  });
+
+  it('registers an installment purchase with multiple product lines', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    api.createPurchase.mockResolvedValue({ id: 'purchase-2', total: '289.90' });
+    render(<App api={api as never} />);
+    await login();
+
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Registrar compra' }));
+    await screen.findByRole('heading', { name: 'Registrar compra' });
+    fireEvent.change(screen.getByLabelText(/^cuenta$/i), { target: { value: 'account-1' } });
+
+    fireEvent.change(screen.getByLabelText(/producto o servicio/i), { target: { value: 'product-1' } });
+    fireEvent.change(screen.getByLabelText(/^cantidad$/i), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: /agregar al detalle/i }));
+    fireEvent.change(screen.getByLabelText(/producto o servicio/i), { target: { value: 'product-2' } });
+    fireEvent.change(screen.getByLabelText(/^cantidad$/i), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: /agregar al detalle/i }));
+
+    fireEvent.change(screen.getByLabelText(/modalidad de pago/i), { target: { value: 'INSTALLMENTS' } });
+    fireEvent.change(screen.getByLabelText(/número de cuotas/i), { target: { value: '3' } });
+    const form = screen.getByRole('form', { name: /registro de compra/i });
+    fireEvent.click(within(form).getByRole('button', { name: /registrar compra/i }));
+
+    await waitFor(() => expect(api.createPurchase).toHaveBeenCalledWith('store-1', {
+      accountId: 'account-1',
+      purchasedAt: expect.any(String),
+      currency: 'PEN',
+      mode: 'INSTALLMENTS',
+      installmentCount: 3,
+      items: [
+        { productId: 'product-1', quantity: '2' },
+        { productId: 'product-2', quantity: '1' },
+      ],
+      idempotencyKey: expect.any(String),
+    }));
+    expect(await screen.findByText(/compra registrada por s\/ 289.90/i)).toBeVisible();
   });
 
   it('opens the product catalog and presents the image registered by the business', async () => {
@@ -195,10 +247,13 @@ describe('App por roles', () => {
     );
     render(<App api={api as never} />);
     await login();
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Registrar compra' }));
     await screen.findByRole('option', { name: /CC-001/i });
     fireEvent.change(screen.getByLabelText(/^cuenta$/i), { target: { value: 'account-1' } });
     fireEvent.change(screen.getByLabelText(/producto o servicio/i), { target: { value: 'product-1' } });
-    const form = screen.getByLabelText(/^cuenta$/i).closest('form')!;
+    fireEvent.click(screen.getByRole('button', { name: /agregar al detalle/i }));
+    const form = screen.getByRole('form', { name: /registro de compra/i });
     fireEvent.submit(form);
     fireEvent.submit(form);
     expect(api.createPurchase).toHaveBeenCalledTimes(1);

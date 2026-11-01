@@ -11,4 +11,5 @@
 - Imagenes de productos mediante URL HTTPS disponibles en catalogo e historial de compras.
 - Catalogo web del negocio con busqueda, vista previa de imagen y alta de productos.
 - Directorio web de clientes con saldos por cuenta y registro de nuevas identidades.
+- Pantalla guiada de compras con multiples conceptos, imagenes y modalidades de fin de mes o cuotas.
 - Prisma, migracion, semillas ficticias, Docker, CI y guias de despliegue.
