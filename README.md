@@ -24,3 +24,18 @@ npm run build
 
 Copie `.env.example` como `.env` y reemplace todos los secretos antes de iniciar la API.
 
+## Base de datos local
+
+Configure `DATABASE_URL` en `.env` y ejecute:
+
+```powershell
+npm run prisma:generate --workspace @credicuenta/api
+npm exec --workspace @credicuenta/api -- prisma migrate deploy
+npm exec --workspace @credicuenta/api -- prisma db seed
+```
+
+La semilla usa exclusivamente datos ficticios. Los usuarios
+`plataforma@credicuenta.test`, `negocio@credicuenta.test` y
+`cliente@credicuenta.test` comparten la clave local `DemoSegura#2026`. Debe
+cambiarse fuera de la demostracion academica.
+

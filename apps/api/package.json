@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
     "dev": "node --watch --import tsx src/main.ts",
     "lint": "oxlint src test",
     "prisma:generate": "prisma generate",
@@ -26,6 +26,7 @@
     "@prisma/adapter-mariadb": "7.10.1",
     "@prisma/client": "7.10.1",
     "decimal.js": "10.6.0",
+    "dotenv": "18.0.3",
     "luxon": "3.7.2",
     "mariadb": "3.5.4",
     "reflect-metadata": "0.2.2",
