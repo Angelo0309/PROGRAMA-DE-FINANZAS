@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { JwtAccessGuard, StoreAccessGuard } from '../auth/auth.guards.js';
+import { JwtAccessGuard, STORE_ROLES, StoreAccessGuard } from '../auth/auth.guards.js';
 import { BusinessService } from './business.service.js';
 import { BusinessController } from './business.controller.js';
 
@@ -81,5 +81,15 @@ describe('BusinessController', () => {
       .send({ sku: 'PROD-001', name: 'Producto', unitPrice: 120, currency: 'PEN' })
       .expect(400);
     expect(service.createProduct).not.toHaveBeenCalled();
+  });
+
+  it('allows operators to read operational data but reserves setup changes for administrators', () => {
+    expect(Reflect.getMetadata(STORE_ROLES, BusinessController)).toEqual([
+      'STORE_ADMIN',
+      'OPERATOR',
+    ]);
+    expect(Reflect.getMetadata(STORE_ROLES, BusinessController.prototype.createProduct)).toEqual([
+      'STORE_ADMIN',
+    ]);
   });
 });

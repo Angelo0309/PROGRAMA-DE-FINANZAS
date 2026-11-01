@@ -67,6 +67,25 @@ describe('App por roles', () => {
     expect(await screen.findByText(/compra registrada por s\/ 100.00/i)).toBeVisible();
   });
 
+  it('does not submit a purchase command twice while the first request is pending', async () => {
+    let finishPurchase: ((value: { id: string; total: string }) => void) | undefined;
+    const api = makeApi({ id: 'operator-1', displayName: 'Operador', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'OPERATOR' }] });
+    api.createPurchase.mockImplementation(
+      () => new Promise((resolve) => { finishPurchase = resolve; }),
+    );
+    render(<App api={api as never} />);
+    await login();
+    await screen.findByRole('option', { name: /CC-001/i });
+    fireEvent.change(screen.getByLabelText(/^cuenta$/i), { target: { value: 'account-1' } });
+    fireEvent.change(screen.getByLabelText(/producto o servicio/i), { target: { value: 'product-1' } });
+    const form = screen.getByLabelText(/^cuenta$/i).closest('form')!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(api.createPurchase).toHaveBeenCalledTimes(1);
+    finishPurchase?.({ id: 'purchase-1', total: '100.00' });
+    expect(await screen.findByText(/compra registrada/i)).toBeVisible();
+  });
+
   it('shows a client only their official account balances', async () => {
     const api = makeApi({ id: 'client-1', displayName: 'Maria Demo', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'CLIENT' }] });
     render(<App api={api as never} />);

@@ -270,4 +270,22 @@ describe('AuthService', () => {
       status: 401,
     });
   });
+
+  it('denies store access immediately for a deactivated user', async () => {
+    const activated = await service.activate({
+      token: invitationToken,
+      username: 'cliente.demo',
+      displayName: 'Cliente Demo',
+      password: 'ClaveSegura#2026',
+    });
+    repository.users.set('user-1', {
+      ...repository.users.get('user-1')!,
+      active: false,
+    });
+
+    await expect(service.assertStoreAccess('user-1', STORE_ID, ['CLIENT'])).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(activated.accessToken).toBeTypeOf('string');
+  });
 });

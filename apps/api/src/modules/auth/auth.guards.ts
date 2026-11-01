@@ -14,6 +14,7 @@ import {
   AuthService,
   type AccessTokenClaims,
 } from './auth.service.js';
+import { resolveAccessTokenSecret } from './auth.config.js';
 import type { StoreRole } from './ports/auth.repository.js';
 
 export const STORE_ROLES = 'credicuenta:store-roles';
@@ -42,9 +43,7 @@ export class JwtAccessGuard implements CanActivate {
     }
     try {
       request.user = await this.jwtService.verifyAsync<AccessTokenClaims>(token, {
-        secret:
-          process.env.JWT_ACCESS_SECRET ??
-          'local-development-secret-change-before-deploying',
+        secret: resolveAccessTokenSecret(),
       });
       return true;
     } catch {

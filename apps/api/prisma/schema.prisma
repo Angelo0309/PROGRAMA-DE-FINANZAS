@@ -154,7 +154,7 @@ model CreditAccount {
   accountNumber       String            @map("numero_cuenta") @db.VarChar(40)
   currency            String            @db.Char(3)
   creditLimit         Decimal           @map("limite_credito") @db.Decimal(19, 4)
-  originalOutstanding Decimal           @default(0) @map("capital_original_pendiente") @db.Decimal(19, 4)
+  originalOutstanding Decimal           @default(0) @map("capital_original_pendiente") @db.Decimal(19, 12)
   active              Boolean           @default(true) @map("activo")
   createdAt           DateTime          @default(now()) @map("creado_en") @db.DateTime(3)
   updatedAt           DateTime          @updatedAt @map("actualizado_en") @db.DateTime(3)
@@ -268,7 +268,7 @@ model Credit {
   storeId             String       @map("tienda_id") @db.Char(36)
   accountId           String       @map("cuenta_id") @db.Char(36)
   purchaseId          String       @map("compra_id") @db.Char(36)
-  principal           Decimal      @map("capital") @db.Decimal(19, 4)
+  principal           Decimal      @map("capital") @db.Decimal(19, 12)
   currency            String       @db.Char(3)
   baseDate            DateTime     @map("fecha_base") @db.Date
   installmentCount    Int          @map("numero_cuotas") @db.UnsignedSmallInt
@@ -291,12 +291,13 @@ model Obligation {
   creditId              String           @map("credito_id") @db.Char(36)
   installmentNumber     Int              @map("numero_cuota") @db.UnsignedSmallInt
   dueDate               DateTime         @map("fecha_vencimiento") @db.Date
-  openingBalance        Decimal          @map("saldo_inicial") @db.Decimal(19, 4)
-  principalDue          Decimal          @map("capital_exigible") @db.Decimal(19, 4)
-  compensatoryInterest  Decimal          @map("interes_compensatorio") @db.Decimal(19, 4)
+  openingBalance        Decimal          @map("saldo_inicial") @db.Decimal(19, 12)
+  principalDue          Decimal          @map("capital_exigible") @db.Decimal(19, 12)
+  originalPrincipalRecoverable Decimal   @map("capital_original_recuperable") @db.Decimal(19, 12)
+  compensatoryInterest  Decimal          @map("interes_compensatorio") @db.Decimal(19, 12)
   lateInterest          Decimal          @default(0) @map("interes_moratorio") @db.Decimal(19, 4)
-  amountDue             Decimal          @map("importe_exigible") @db.Decimal(19, 4)
-  paidAmount            Decimal          @default(0) @map("importe_pagado") @db.Decimal(19, 4)
+  amountDue             Decimal          @map("importe_exigible") @db.Decimal(19, 12)
+  paidAmount            Decimal          @default(0) @map("importe_pagado") @db.Decimal(19, 12)
   status                ObligationStatus @default(PENDING) @map("estado")
   createdAt             DateTime         @default(now()) @map("creado_en") @db.DateTime(3)
   credit                Credit           @relation(fields: [creditId], references: [id])

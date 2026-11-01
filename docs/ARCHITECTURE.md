@@ -22,7 +22,9 @@ y usan claves de idempotencia. Los importes y tasas de la API son cadenas.
 1. Un administrador invita al usuario y este activa su cuenta.
 2. El negocio registra una compra contra una condicion vigente.
 3. El motor crea una obligacion de fin de mes o un plan frances.
-4. El corte expone las obligaciones elegibles una sola vez.
+4. El corte expone las obligaciones de fin de mes elegibles una sola vez. Las
+   compras en cuotas se consultan y cobran por su cronograma, sin consumir de
+   forma anticipada cuotas futuras en el primer estado de cuenta.
 5. El pago debe cubrir exactamente lo exigible y se aplica en orden: mora,
    interes compensatorio y capital.
 

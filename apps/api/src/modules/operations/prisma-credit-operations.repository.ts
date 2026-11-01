@@ -30,6 +30,7 @@ function mapObligation(item: {
   dueDate: Date;
   openingBalance: { toString(): string };
   principalDue: { toString(): string };
+  originalPrincipalRecoverable: { toString(): string };
   compensatoryInterest: { toString(): string };
   lateDailyRate?: { toString(): string };
   lateInterest: { toString(): string };
@@ -44,6 +45,7 @@ function mapObligation(item: {
     dueDate: item.dueDate.toISOString().slice(0, 10),
     openingBalance: item.openingBalance.toString(),
     principalDue: item.principalDue.toString(),
+    originalPrincipalRecoverable: item.originalPrincipalRecoverable.toString(),
     compensatoryInterest: item.compensatoryInterest.toString(),
     lateDailyRate: item.lateDailyRate?.toString() ?? '0',
     amountDue: item.amountDue.toString(),
@@ -209,7 +211,10 @@ class PrismaCreditOperationsTransaction implements CreditOperationsTransaction {
       where: {
         credit: {
           accountId,
-          purchase: { assignedCutAt: { lte: asDate(cutAt) } },
+          purchase: {
+            assignedCutAt: { lte: asDate(cutAt) },
+            mode: 'END_OF_MONTH',
+          },
         },
         cutDetails: { none: {} },
         status: { in: ['PENDING', 'OVERDUE'] },
@@ -316,6 +321,7 @@ class PrismaCreditOperationsTransaction implements CreditOperationsTransaction {
                 dueDate: asDate(obligation.dueDate),
                 openingBalance: obligation.openingBalance,
                 principalDue: obligation.principalDue,
+                originalPrincipalRecoverable: obligation.originalPrincipalRecoverable,
                 compensatoryInterest: obligation.compensatoryInterest,
                 lateInterest: '0',
                 amountDue: obligation.amountDue,
@@ -361,6 +367,16 @@ class PrismaCreditOperationsTransaction implements CreditOperationsTransaction {
   }
 
   async savePayment(payment: PaymentRecord): Promise<void> {
+    const obligations = await this.transaction.obligation.findMany({
+      where: { id: { in: payment.allocations.map((allocation) => allocation.obligationId) } },
+      select: { id: true, originalPrincipalRecoverable: true },
+    });
+    const originalPrincipalByObligation = new Map(
+      obligations.map((obligation) => [
+        obligation.id,
+        new Decimal(obligation.originalPrincipalRecoverable.toString()),
+      ]),
+    );
     await this.transaction.payment.create({
       data: {
         id: payment.id,
@@ -396,17 +412,20 @@ class PrismaCreditOperationsTransaction implements CreditOperationsTransaction {
     const account = await this.transaction.creditAccount.findUniqueOrThrow({
       where: { id_storeId: { id: payment.accountId, storeId: payment.storeId } },
     });
-    const principalPaid = payment.allocations.reduce(
-      (sum, allocation) => sum.plus(allocation.principalPaid),
+    const originalPrincipalRecovered = payment.allocations.reduce(
+      (sum, allocation) =>
+        sum.plus(originalPrincipalByObligation.get(allocation.obligationId) ?? 0),
       new Decimal(0),
+    );
+    const remaining = new Decimal(account.originalOutstanding.toString()).minus(
+      originalPrincipalRecovered,
     );
     await this.transaction.creditAccount.update({
       where: { id_storeId: { id: payment.accountId, storeId: payment.storeId } },
       data: {
-        originalOutstanding: Decimal.max(
-          0,
-          new Decimal(account.originalOutstanding.toString()).minus(principalPaid),
-        ).toString(),
+        originalOutstanding: remaining.abs().lte('0.000000000001')
+          ? '0'
+          : Decimal.max(0, remaining).toString(),
       },
     });
   }

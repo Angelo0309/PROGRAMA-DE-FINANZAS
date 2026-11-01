@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 
 import { PrismaService } from '../../database/prisma.service.js';
+import { resolveAccessTokenSecret } from './auth.config.js';
 import { AuthController } from './auth.controller.js';
 import {
   JwtAccessGuard,
@@ -17,14 +18,8 @@ function readPositiveInteger(value: string | undefined, fallback: number): numbe
 }
 
 function loadAuthOptions(): AuthServiceOptions {
-  const accessTokenSecret =
-    process.env.JWT_ACCESS_SECRET ??
-    'local-development-secret-change-before-deploying';
-  if (process.env.NODE_ENV === 'production' && accessTokenSecret.length < 32) {
-    throw new Error('JWT_ACCESS_SECRET must contain at least 32 characters.');
-  }
   return {
-    accessTokenSecret,
+    accessTokenSecret: resolveAccessTokenSecret(),
     accessTokenTtlSeconds: readPositiveInteger(
       process.env.ACCESS_TOKEN_TTL_SECONDS,
       900,

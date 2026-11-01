@@ -332,6 +332,7 @@ export class CreditOperationsService {
         dueDate,
         openingBalance: precise(principal),
         principalDue: precise(principal),
+        originalPrincipalRecoverable: precise(principal),
         compensatoryInterest: precise(result.interest),
         lateDailyRate: lateDailyRate.toFixed(15),
         amountDue: precise(result.amount),
@@ -367,8 +368,15 @@ export class CreditOperationsService {
       installmentNumber: installment.number,
       dueDate: installment.dueDate,
       openingBalance: precise(installment.openingBalance),
+      // Capital originally consumed releases the account limit. The balance
+      // created by total grace is charged as compensatory interest instead.
       principalDue: precise(installment.originalPrincipalRecoverable),
-      compensatoryInterest: precise(installment.interest),
+      originalPrincipalRecoverable: precise(installment.originalPrincipalRecoverable),
+      compensatoryInterest: precise(
+        installment.interest.plus(
+          installment.amortization.minus(installment.originalPrincipalRecoverable),
+        ),
+      ),
       lateDailyRate: lateDailyRate.toFixed(15),
       amountDue: precise(installment.payment),
       paidAmount: '0.000000000000',

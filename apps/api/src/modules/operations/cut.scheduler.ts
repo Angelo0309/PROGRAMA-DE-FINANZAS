@@ -22,6 +22,7 @@ export class CutScheduler {
     const purchases = await this.prisma.purchase.findMany({
       where: {
         assignedCutAt: { lte: now },
+        mode: 'END_OF_MONTH',
         credit: {
           obligations: {
             some: { cutDetails: { none: {} }, status: { in: ['PENDING', 'OVERDUE'] } },

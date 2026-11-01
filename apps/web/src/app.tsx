@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Alert, CircularProgress } from '@mui/material';
 import { z } from 'zod';
 
@@ -274,6 +274,9 @@ function BusinessWorkspace({
   const [quantity, setQuantity] = useState('1');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const purchaseKey = useRef<string | null>(null);
+  const purchaseInFlight = useRef(false);
 
   useEffect(() => {
     void Promise.all([
@@ -298,12 +301,17 @@ function BusinessWorkspace({
 
   async function submitPurchase(event: FormEvent) {
     event.preventDefault();
+    if (purchaseInFlight.current) return;
     if (!accountId || !productId || !/^\d+(?:\.\d+)?$/.test(quantity)) {
       setError('Seleccione una cuenta, un producto y una cantidad válida.');
       return;
     }
     setError('');
     setNotice('');
+    purchaseInFlight.current = true;
+    setSubmitting(true);
+    const idempotencyKey = purchaseKey.current ?? crypto.randomUUID();
+    purchaseKey.current = idempotencyKey;
     try {
       const purchase = await api.createPurchase(access.storeId, {
         accountId,
@@ -311,10 +319,15 @@ function BusinessWorkspace({
         currency: access.currency,
         mode: 'END_OF_MONTH',
         items: [{ productId, quantity }],
+        idempotencyKey,
       });
       setNotice(`Compra registrada por ${money(access.currency, purchase.total)}.`);
+      purchaseKey.current = null;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'No fue posible registrar la compra.');
+    } finally {
+      purchaseInFlight.current = false;
+      setSubmitting(false);
     }
   }
 
@@ -345,7 +358,9 @@ function BusinessWorkspace({
             <p className="field-help">El total, la tasa y la fecha de pago serán calculados por la API.</p>
             {error && <Alert severity="error">{error}</Alert>}
             {notice && <Alert severity="success">{notice}</Alert>}
-            <button className="primary-button" type="submit">Registrar compra</button>
+            <button className="primary-button" type="submit" disabled={submitting}>
+              {submitting ? 'Registrando compra…' : 'Registrar compra'}
+            </button>
           </form>
         </section>
         <section className="paper-section account-list" id="actividad">

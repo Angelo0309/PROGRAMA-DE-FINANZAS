@@ -166,7 +166,10 @@ export class AuthService {
     allowedRoles: StoreRole[],
   ): Promise<void> {
     const user = await this.repository.findUserById(userId);
-    if (user?.active && user.platformRole === 'PLATFORM_ADMIN') {
+    if (!user?.active) {
+      throw new ForbiddenException('El usuario ya no está activo.');
+    }
+    if (user.platformRole === 'PLATFORM_ADMIN') {
       return;
     }
 

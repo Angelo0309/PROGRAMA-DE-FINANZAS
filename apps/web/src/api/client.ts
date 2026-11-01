@@ -52,6 +52,7 @@ export interface ApiClient {
       mode: 'END_OF_MONTH' | 'INSTALLMENTS';
       installmentCount?: number;
       items: Array<{ productId: string; quantity: string }>;
+      idempotencyKey?: string;
     },
   ): Promise<{ id: string; total: string }>;
   getMyAccounts(): Promise<AccountView[]>;
@@ -147,12 +148,13 @@ class HttpApiClient implements ApiClient {
     storeId: string,
     input: Parameters<ApiClient['createPurchase']>[1],
   ) {
+    const { idempotencyKey, ...command } = input;
     return this.request<{ id: string; total: string }>(
       `/stores/${storeId}/purchases`,
       {
         method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify(input),
+        headers: { 'Idempotency-Key': idempotencyKey ?? crypto.randomUUID() },
+        body: JSON.stringify(command),
       },
     );
   }

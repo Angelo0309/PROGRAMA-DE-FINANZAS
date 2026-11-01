@@ -24,6 +24,10 @@ describe('CutScheduler', () => {
 
     await scheduler.runDueCuts(new Date('2026-10-31T15:00:00.000Z'));
 
+    expect(prisma.purchase.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ mode: 'END_OF_MONTH' }) }),
+    );
+
     expect(operations.createCut).toHaveBeenCalledWith({
       storeId: 'store-1',
       accountId: 'account-1',

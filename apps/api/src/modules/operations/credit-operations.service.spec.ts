@@ -85,7 +85,12 @@ class MemoryOperationsRepository
   }
   async listObligationsForCut(accountId: string, cutAt: string) {
     return this.purchases
-      .filter((purchase) => purchase.accountId === accountId && purchase.assignedCutAt <= cutAt)
+      .filter(
+        (purchase) =>
+          purchase.accountId === accountId &&
+          purchase.mode === 'END_OF_MONTH' &&
+          purchase.assignedCutAt <= cutAt,
+      )
       .flatMap((purchase) => purchase.obligations)
       .filter((obligation) => !this.cuts.some((cut) => cut.obligationIds.includes(obligation.id)));
   }
@@ -112,9 +117,12 @@ class MemoryOperationsRepository
         .find((item) => item.id === allocation.obligationId)!;
       obligation.status = 'PAID';
       obligation.paidAmount = payment.amount;
-      this.account.originalOutstanding = new Decimal(this.account.originalOutstanding)
-        .minus(allocation.principalPaid)
-        .toString();
+      const remaining = new Decimal(this.account.originalOutstanding).minus(
+        obligation.originalPrincipalRecoverable,
+      );
+      this.account.originalOutstanding = remaining.abs().lte('0.000000000001')
+        ? '0'
+        : remaining.toString();
     }
   }
 }
@@ -191,6 +199,24 @@ describe('CreditOperationsService', () => {
     expect(repeated).toBe(cut);
   });
 
+  it('keeps installment schedules out of the end-of-month statement', async () => {
+    const purchase = await service.createPurchase({
+      ...basePurchase,
+      mode: 'INSTALLMENTS',
+      installmentCount: 3,
+      idempotencyKey: 'installment-schedule',
+    });
+    const cut = await service.createCut({
+      storeId: 'store-1',
+      accountId: 'account-1',
+      idempotencyKey: 'installment-cut',
+      cutAt: purchase.assignedCutAt,
+    });
+
+    expect(cut.obligationIds).toEqual([]);
+    expect(cut.totalDue).toBe('0.00');
+  });
+
   it('accepts only an exact full payment and allocates mora, interest, then capital', async () => {
     const purchase = await service.createPurchase(basePurchase);
     const paidAt = `${purchase.obligations[0]!.dueDate}T12:00:00-05:00`;
@@ -216,6 +242,64 @@ describe('CreditOperationsService', () => {
       principalPaid: '100.00',
     });
     expect(await service.createPayment(input)).toBe(payment);
+  });
+
+  it('keeps capitalized grace interest out of original-credit recovery', async () => {
+    repository.products[0]!.unitPrice = '1200.00';
+    repository.account.creditLimit = '2000.00';
+    repository.condition = {
+      ...repository.condition,
+      compensatoryRate: '0.24',
+      graceMonths: 1,
+    };
+    const purchase = await service.createPurchase({
+      ...basePurchase,
+      idempotencyKey: 'grace-interest',
+      mode: 'INSTALLMENTS',
+      installmentCount: 3,
+    });
+    const first = purchase.obligations[0]!;
+
+    const payment = await service.createPayment({
+      storeId: 'store-1',
+      accountId: 'account-1',
+      operatorUserId: 'operator-1',
+      idempotencyKey: 'grace-payment',
+      paidAt: `${first.dueDate}T12:00:00-05:00`,
+      currency: 'PEN',
+      amount: new Decimal(first.amountDue).toFixed(2),
+    });
+
+    expect(
+      new Decimal(payment.allocations[0]!.principalPaid)
+        .minus(first.principalDue)
+        .abs()
+        .lte('0.01'),
+    ).toBe(true);
+    expect(new Decimal(first.compensatoryInterest).gt('21.85')).toBe(true);
+  });
+
+  it('releases every exact original-principal share after rounded installments', async () => {
+    const purchase = await service.createPurchase({
+      ...basePurchase,
+      idempotencyKey: 'one-hundred-in-three',
+      mode: 'INSTALLMENTS',
+      installmentCount: 3,
+    });
+
+    for (const [index, obligation] of purchase.obligations.entries()) {
+      await service.createPayment({
+        storeId: 'store-1',
+        accountId: 'account-1',
+        operatorUserId: 'operator-1',
+        idempotencyKey: `installment-${index}`,
+        paidAt: `${obligation.dueDate}T12:00:00-05:00`,
+        currency: 'PEN',
+        amount: new Decimal(obligation.amountDue).toFixed(2),
+      });
+    }
+
+    expect(repository.account.originalOutstanding).toBe('0');
   });
 
   it('retries transient serialization conflicts at most three times', async () => {

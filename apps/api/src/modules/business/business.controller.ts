@@ -77,7 +77,7 @@ type AuthenticatedRequest = { user: AccessTokenClaims };
 @ApiTags('business')
 @ApiBearerAuth()
 @UseGuards(JwtAccessGuard, StoreAccessGuard)
-@StoreRoles('STORE_ADMIN')
+@StoreRoles('STORE_ADMIN', 'OPERATOR')
 @Controller()
 export class BusinessController {
   constructor(private readonly service: BusinessService) {}
@@ -88,6 +88,7 @@ export class BusinessController {
   }
 
   @Post('stores/:storeId/clients')
+  @StoreRoles('STORE_ADMIN')
   createClient(
     @Param('storeId') storeId: string,
     @Req() request: AuthenticatedRequest,
@@ -114,6 +115,7 @@ export class BusinessController {
   }
 
   @Post('stores/:storeId/products')
+  @StoreRoles('STORE_ADMIN')
   createProduct(
     @Param('storeId') storeId: string,
     @Req() request: AuthenticatedRequest,
@@ -142,6 +144,7 @@ export class BusinessController {
   }
 
   @Post('stores/:storeId/accounts')
+  @StoreRoles('STORE_ADMIN')
   createAccount(
     @Param('storeId') storeId: string,
     @Req() request: AuthenticatedRequest,
@@ -155,6 +158,7 @@ export class BusinessController {
   }
 
   @Post('accounts/:accountId/credit-conditions')
+  @StoreRoles('STORE_ADMIN')
   addCreditCondition(
     @Param('accountId') accountId: string,
     @Req() request: AuthenticatedRequest,

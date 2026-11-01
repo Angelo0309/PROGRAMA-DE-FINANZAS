@@ -38,6 +38,7 @@ export interface ObligationRecord {
   dueDate: string;
   openingBalance: string;
   principalDue: string;
+  originalPrincipalRecoverable: string;
   compensatoryInterest: string;
   lateDailyRate: string;
   amountDue: string;
