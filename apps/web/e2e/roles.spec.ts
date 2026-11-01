@@ -50,7 +50,7 @@ test('a client signs in and sees only the personal portal', async ({ page }) => 
   await page.goto('/');
   await page.getByLabel('Correo o usuario').fill('cliente@credicuenta.test');
   await page.getByLabel('Contraseña').fill('DemoSegura#2026');
-  await page.getByRole('button', { name: 'Ingresar' }).click();
+  await page.getByRole('button', { name: 'Iniciar sesión' }).click();
 
   await expect(page.getByRole('heading', { name: 'Mi CrediCuenta' })).toBeVisible();
   await expect(page.getByText('S/ 100.00')).toBeVisible();

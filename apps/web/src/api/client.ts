@@ -16,10 +16,21 @@ export interface AccountView {
 
 export interface ProductView {
   id: string;
+  sku: string;
   name: string;
+  description: string | null;
   unitPrice: string;
   currency: string;
   imageUrl: string | null;
+}
+
+export interface CreateProductInput {
+  sku: string;
+  name: string;
+  description?: string;
+  unitPrice: string;
+  currency: string;
+  imageUrl?: string;
 }
 
 export interface PurchaseItemView {
@@ -60,6 +71,7 @@ export interface ApiClient {
   listAudit(): Promise<Array<{ id: string; event: string; createdAt: string }>>;
   listClients(storeId: string): Promise<Array<{ id: string; fullName: string }>>;
   listProducts(storeId: string): Promise<ProductView[]>;
+  createProduct(storeId: string, input: CreateProductInput): Promise<ProductView>;
   listAccounts(storeId: string): Promise<AccountView[]>;
   createPurchase(
     storeId: string,
@@ -154,6 +166,13 @@ class HttpApiClient implements ApiClient {
 
   listProducts(storeId: string) {
     return this.request<ProductView[]>(`/stores/${storeId}/products`);
+  }
+
+  createProduct(storeId: string, input: CreateProductInput) {
+    return this.request<ProductView>(`/stores/${storeId}/products`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
   }
 
   listAccounts(storeId: string) {

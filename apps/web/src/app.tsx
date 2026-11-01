@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from 'react';
 import { Alert, CircularProgress } from '@mui/material';
 import { z } from 'zod';
 
@@ -18,6 +26,19 @@ const defaultApi = createApiClient();
 const loginSchema = z.object({
   identifier: z.string().trim().min(1, 'Ingrese su correo o usuario.'),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres.'),
+});
+const productFormSchema = z.object({
+  sku: z.string().trim().min(1, 'Ingrese el código del producto.'),
+  name: z.string().trim().min(2, 'Ingrese un nombre de al menos 2 caracteres.'),
+  description: z.string().trim().max(10_000),
+  unitPrice: z.string().regex(/^\d+(?:\.\d{1,4})?$/, 'Ingrese un precio válido.'),
+  imageUrl: z
+    .string()
+    .trim()
+    .refine(
+      (value) => value === '' || /^https?:\/\/[^\s]+$/i.test(value),
+      'La imagen debe usar una dirección HTTP o HTTPS.',
+    ),
 });
 
 const money = (currency: string, amount: string) =>
@@ -131,6 +152,9 @@ function WorkspaceShell({
   title,
   kicker,
   navigation,
+  activeNavigation,
+  availableNavigation,
+  onNavigate,
   onLogout,
   children,
 }: {
@@ -138,6 +162,9 @@ function WorkspaceShell({
   title: string;
   kicker: string;
   navigation: string[];
+  activeNavigation?: string;
+  availableNavigation?: string[];
+  onNavigate?: (item: string) => void;
   onLogout: () => void;
   children: React.ReactNode;
 }) {
@@ -161,12 +188,30 @@ function WorkspaceShell({
           <span>{kicker}</span>
         </div>
         <nav className="sidebar-navigation" aria-label="Secciones">
-          {navigation.map((item, index) => (
-            <a className={index === 0 ? 'active' : ''} href={index === 0 ? '#inicio' : '#actividad'} key={item}>
-              <span className="nav-indicator" aria-hidden="true" />
-              {item}
-            </a>
-          ))}
+          {navigation.map((item, index) => {
+            const active = activeNavigation ? activeNavigation === item : index === 0;
+            const available = onNavigate && (availableNavigation?.includes(item) ?? true);
+            if (onNavigate) {
+              return (
+                <button
+                  className={active ? 'active' : ''}
+                  disabled={!available}
+                  key={item}
+                  type="button"
+                  onClick={() => onNavigate(item)}
+                >
+                  <span className="nav-indicator" aria-hidden="true" />
+                  {item}
+                </button>
+              );
+            }
+            return (
+              <a className={active ? 'active' : ''} href={index === 0 ? '#inicio' : '#actividad'} key={item}>
+                <span className="nav-indicator" aria-hidden="true" />
+                {item}
+              </a>
+            );
+          })}
         </nav>
         <div className="sidebar-footer">
           <span>{profile.displayName}</span>
@@ -296,14 +341,223 @@ function PlatformWorkspace({ api, profile }: { api: ApiClient; profile: Profile 
   );
 }
 
+function ProductImage({
+  src,
+  name,
+  preview = false,
+}: {
+  src: string | null;
+  name: string;
+  preview?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [src]);
+
+  if (!src || failed) {
+    return (
+      <span className={preview ? 'product-preview-placeholder' : 'product-thumbnail-placeholder'}>
+        Sin imagen
+      </span>
+    );
+  }
+
+  return (
+    <img
+      className={preview ? 'product-preview-image' : 'product-thumbnail'}
+      src={src}
+      alt={preview ? `Vista previa de ${name || 'producto'}` : name}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function ProductCatalog({
+  api,
+  access,
+  products,
+  setProducts,
+}: {
+  api: ApiClient;
+  access: StoreAccess;
+  products: ProductView[];
+  setProducts: Dispatch<SetStateAction<ProductView[]>>;
+}) {
+  const [search, setSearch] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [sku, setSku] = useState('');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const canManageProducts = access.role === 'STORE_ADMIN';
+  const previewUrl = /^https?:\/\/[^\s]+$/i.test(imageUrl.trim())
+    ? imageUrl.trim()
+    : null;
+  const filteredProducts = products.filter((product) => {
+    const term = search.trim().toLocaleLowerCase('es-PE');
+    if (!term) return true;
+    return [product.sku, product.name, product.description ?? '']
+      .some((value) => value.toLocaleLowerCase('es-PE').includes(term));
+  });
+
+  function resetForm() {
+    setSku('');
+    setName('');
+    setDescription('');
+    setUnitPrice('');
+    setImageUrl('');
+    setError('');
+  }
+
+  async function saveProduct(event: FormEvent) {
+    event.preventDefault();
+    const parsed = productFormSchema.safeParse({
+      sku,
+      name,
+      description,
+      unitPrice,
+      imageUrl,
+    });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Revise los datos ingresados.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const product = await api.createProduct(access.storeId, {
+        sku: parsed.data.sku,
+        name: parsed.data.name,
+        ...(parsed.data.description ? { description: parsed.data.description } : {}),
+        unitPrice: parsed.data.unitPrice,
+        currency: access.currency,
+        ...(parsed.data.imageUrl ? { imageUrl: parsed.data.imageUrl } : {}),
+      });
+      setProducts((current) => [...current, product].sort((left, right) => left.name.localeCompare(right.name, 'es')));
+      setNotice('Producto guardado correctamente.');
+      resetForm();
+      setShowForm(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'No fue posible guardar el producto.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="product-page">
+      <div className="page-lead">
+        <div>
+          <p>Administra los artículos y servicios ofrecidos por {access.storeName}.</p>
+        </div>
+        {canManageProducts && (
+          <button className="primary-button compact-button" type="button" onClick={() => setShowForm(true)}>
+            + Nuevo producto o servicio
+          </button>
+        )}
+      </div>
+
+      {notice && <Alert severity="success">{notice}</Alert>}
+      <div className="catalog-toolbar">
+        <label className="search-field" htmlFor="product-search">
+          <span>Buscar en el catálogo</span>
+          <input
+            id="product-search"
+            type="search"
+            placeholder="Nombre, código o descripción"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <span className="catalog-count">{filteredProducts.length} de {products.length} registros</span>
+      </div>
+
+      <section className="metric-strip product-metrics" aria-label="Indicadores del catálogo">
+        <article><span>Productos y servicios</span><strong>{products.length}</strong></article>
+        <article><span>Con imagen</span><strong>{products.filter((product) => product.imageUrl).length}</strong></article>
+        <article><span>Sin imagen</span><strong>{products.filter((product) => !product.imageUrl).length}</strong></article>
+      </section>
+
+      <div className={showForm ? 'catalog-layout form-open' : 'catalog-layout'}>
+        <section className="catalog-panel" aria-labelledby="catalog-title">
+          <div className="catalog-panel-heading">
+            <h2 id="catalog-title">Catálogo del establecimiento</h2>
+            <span>Precios oficiales de la API</span>
+          </div>
+          {filteredProducts.length === 0 ? (
+            <p className="empty-state catalog-empty">No se encontraron productos con ese criterio.</p>
+          ) : (
+            <div className="table-wrapper">
+              <table className="product-table">
+                <thead><tr><th>Producto o servicio</th><th>Código</th><th>Precio</th><th>Imagen</th></tr></thead>
+                <tbody>
+                  {filteredProducts.map((product) => (
+                    <tr key={product.id}>
+                      <td>
+                        <div className="product-cell">
+                          <ProductImage src={product.imageUrl} name={product.name} />
+                          <div><strong>{product.name}</strong><span>{product.description || 'Sin descripción'}</span></div>
+                        </div>
+                      </td>
+                      <td>{product.sku}</td>
+                      <td className="money-cell">{money(product.currency, product.unitPrice)}</td>
+                      <td><span className={product.imageUrl ? 'status-pill ready' : 'status-pill pending'}>{product.imageUrl ? 'Disponible' : 'Pendiente'}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {showForm && canManageProducts && (
+          <aside className="product-drawer" aria-label="Nuevo producto o servicio">
+            <div className="drawer-heading">
+              <div><p className="folio">CATÁLOGO</p><h2>Nuevo producto o servicio</h2></div>
+              <button className="icon-button" type="button" aria-label="Cerrar formulario" onClick={() => { resetForm(); setShowForm(false); }}>×</button>
+            </div>
+            <form className="product-form" onSubmit={saveProduct} noValidate>
+              <label htmlFor="new-product-sku">Código</label>
+              <input id="new-product-sku" value={sku} onChange={(event) => setSku(event.target.value)} />
+              <label htmlFor="new-product-name">Nombre</label>
+              <input id="new-product-name" value={name} onChange={(event) => setName(event.target.value)} />
+              <label htmlFor="new-product-description">Descripción</label>
+              <textarea id="new-product-description" value={description} onChange={(event) => setDescription(event.target.value)} />
+              <label htmlFor="new-product-price">Precio</label>
+              <div className="money-input"><span>{access.currency === 'PEN' ? 'S/' : access.currency}</span><input id="new-product-price" inputMode="decimal" value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} /></div>
+              <label htmlFor="new-product-image">URL de la imagen</label>
+              <input id="new-product-image" type="url" placeholder="https://..." value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} />
+              <p className="field-help">Use una imagen pública HTTP o HTTPS. No se cargan archivos al servidor.</p>
+              <ProductImage src={previewUrl} name={name} preview />
+              {error && <Alert severity="error">{error}</Alert>}
+              <div className="drawer-actions">
+                <button className="secondary-button" type="button" onClick={() => { resetForm(); setShowForm(false); }}>Cancelar</button>
+                <button className="primary-button" type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar producto'}</button>
+              </div>
+            </form>
+          </aside>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function BusinessWorkspace({
   api,
   profile,
   access,
+  activeSection,
 }: {
   api: ApiClient;
   profile: Profile;
   access: StoreAccess;
+  activeSection: string;
 }) {
   const [accounts, setAccounts] = useState<AccountView[]>([]);
   const [products, setProducts] = useState<ProductView[]>([]);
@@ -369,6 +623,17 @@ function BusinessWorkspace({
     }
   }
 
+  if (activeSection === 'Productos y servicios') {
+    return (
+      <ProductCatalog
+        api={api}
+        access={access}
+        products={products}
+        setProducts={setProducts}
+      />
+    );
+  }
+
   return (
     <>
       <section className="metric-strip">
@@ -414,6 +679,44 @@ function BusinessWorkspace({
       </div>
       <p className="audit-note">Operador: {profile.displayName}. Cada comando crítico utiliza una clave de idempotencia.</p>
     </>
+  );
+}
+
+function BusinessArea({
+  api,
+  profile,
+  access,
+  onLogout,
+}: {
+  api: ApiClient;
+  profile: Profile;
+  access: StoreAccess;
+  onLogout: () => void;
+}) {
+  const [activeSection, setActiveSection] = useState('Panel del negocio');
+  const availableNavigation = ['Panel del negocio', 'Productos y servicios'];
+  const title = activeSection === 'Productos y servicios'
+    ? 'Productos y servicios'
+    : 'Mesa de crédito';
+
+  return (
+    <WorkspaceShell
+      profile={profile}
+      title={title}
+      kicker="Operación del negocio"
+      navigation={businessNavigation}
+      activeNavigation={activeSection}
+      availableNavigation={availableNavigation}
+      onNavigate={setActiveSection}
+      onLogout={onLogout}
+    >
+      <BusinessWorkspace
+        api={api}
+        profile={profile}
+        access={access}
+        activeSection={activeSection}
+      />
+    </WorkspaceShell>
   );
 }
 
@@ -497,11 +800,7 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
     ['STORE_ADMIN', 'OPERATOR'].includes(access.role),
   );
   if (businessAccess) {
-    return (
-      <WorkspaceShell profile={profile} title="Mesa de crédito" kicker="Operación del negocio" navigation={businessNavigation} onLogout={logout}>
-        <BusinessWorkspace api={api} profile={profile} access={businessAccess} />
-      </WorkspaceShell>
-    );
+    return <BusinessArea api={api} profile={profile} access={businessAccess} onLogout={logout} />;
   }
 
   return (
