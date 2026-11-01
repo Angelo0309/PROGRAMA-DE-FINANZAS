@@ -37,7 +37,14 @@ const productSchema = z.object({
   description: z.string().max(10_000).optional(),
   unitPrice: decimal,
   currency: z.string().length(3),
-  imageUrl: z.string().url().max(2048).optional(),
+  imageUrl: z
+    .string()
+    .url()
+    .max(2048)
+    .refine((value) => ['http:', 'https:'].includes(new URL(value).protocol), {
+      message: 'La imagen debe usar una URL HTTP o HTTPS.',
+    })
+    .optional(),
 });
 const accountSchema = z.object({
   customerId: z.string().min(1),

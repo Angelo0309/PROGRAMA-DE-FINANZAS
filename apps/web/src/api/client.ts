@@ -19,6 +19,24 @@ export interface ProductView {
   name: string;
   unitPrice: string;
   currency: string;
+  imageUrl: string | null;
+}
+
+export interface PurchaseItemView {
+  productId: string;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  lineTotal: string;
+  imageUrl: string | null;
+}
+
+export interface PurchaseView {
+  id: string;
+  purchasedAt: string;
+  total: string;
+  currency: string;
+  items: PurchaseItemView[];
 }
 
 export interface ApiClient {
@@ -59,9 +77,7 @@ export interface ApiClient {
   getMyStatements(): Promise<
     Array<{ id: string; dueDate: string; totalDue: string; currency: string }>
   >;
-  getMyPurchases(): Promise<
-    Array<{ id: string; purchasedAt: string; total: string; currency: string }>
-  >;
+  getMyPurchases(): Promise<PurchaseView[]>;
 }
 
 export const ACCESS_TOKEN_KEY = 'credicuenta.accessToken';
@@ -170,9 +186,7 @@ class HttpApiClient implements ApiClient {
   }
 
   getMyPurchases() {
-    return this.request<
-      Array<{ id: string; purchasedAt: string; total: string; currency: string }>
-    >('/me/purchases');
+    return this.request<PurchaseView[]>('/me/purchases');
   }
 }
 

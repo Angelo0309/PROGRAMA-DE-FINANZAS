@@ -8,4 +8,5 @@
 - Compras, obligaciones, cortes, pagos completos, auditoria y portales por rol.
 - Bajas logicas auditadas y recorrido HTTP integral de activacion a comprobante.
 - Importes cobrables presentados con redondeo HALF_UP a dos decimales.
+- Imagenes de productos mediante URL HTTPS disponibles en catalogo e historial de compras.
 - Prisma, migracion, semillas ficticias, Docker, CI y guias de despliegue.

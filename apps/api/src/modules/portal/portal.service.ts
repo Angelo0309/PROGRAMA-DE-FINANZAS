@@ -199,6 +199,12 @@ export class PortalService {
   async getMyPurchases(userId: string) {
     const purchases = await this.prisma.purchase.findMany({
       where: { account: { customer: { userId } } },
+      include: {
+        details: {
+          include: { product: { select: { imageUrl: true } } },
+          orderBy: { id: 'asc' },
+        },
+      },
       orderBy: { purchasedAt: 'desc' },
     });
     return purchases.map((purchase) => ({
@@ -209,6 +215,14 @@ export class PortalService {
       currency: purchase.currency,
       total: purchase.total.toFixed(2),
       status: purchase.status,
+      items: purchase.details.map((detail) => ({
+        productId: detail.productId,
+        description: detail.description,
+        quantity: detail.quantity.toFixed(4),
+        unitPrice: detail.unitPrice.toFixed(4),
+        lineTotal: detail.lineTotal.toFixed(2),
+        imageUrl: detail.product.imageUrl,
+      })),
     }));
   }
 }

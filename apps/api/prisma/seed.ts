@@ -135,12 +135,29 @@ await prisma.creditCondition.upsert({
 });
 
 for (const product of [
-  { sku: 'PROD-001', name: 'Producto Demo', unitPrice: '120.0000' },
-  { sku: 'SERV-001', name: 'Servicio Demo', unitPrice: '80.0000' },
+  {
+    sku: 'PROD-001',
+    name: 'Producto Demo',
+    unitPrice: '120.0000',
+    imageUrl:
+      'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=900&q=80',
+  },
+  {
+    sku: 'SERV-001',
+    name: 'Servicio Demo',
+    unitPrice: '80.0000',
+    imageUrl:
+      'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=900&q=80',
+  },
 ]) {
   await prisma.productService.upsert({
     where: { storeId_sku: { storeId: store.id, sku: product.sku } },
-    update: { name: product.name, unitPrice: product.unitPrice, active: true },
+    update: {
+      name: product.name,
+      unitPrice: product.unitPrice,
+      imageUrl: product.imageUrl,
+      active: true,
+    },
     create: { ...product, storeId: store.id, currency: 'PEN' },
   });
 }

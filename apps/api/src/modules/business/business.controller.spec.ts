@@ -68,14 +68,33 @@ describe('BusinessController', () => {
         name: 'Producto Demo',
         unitPrice: '120.0000',
         currency: 'PEN',
+        imageUrl: 'https://images.example.com/producto-demo.jpg',
       })
       .expect(201);
 
     expect(service.createProduct).toHaveBeenCalledWith(
       'store-1',
-      expect.objectContaining({ unitPrice: '120.0000' }),
+      expect.objectContaining({
+        unitPrice: '120.0000',
+        imageUrl: 'https://images.example.com/producto-demo.jpg',
+      }),
       'admin-1',
     );
+  });
+
+  it('rejects product image URLs that do not use HTTP or HTTPS', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/stores/store-1/products')
+      .send({
+        sku: 'PROD-FTP',
+        name: 'Producto con imagen FTP',
+        unitPrice: '25.0000',
+        currency: 'PEN',
+        imageUrl: 'ftp://files.example.com/producto.jpg',
+      })
+      .expect(400);
+
+    expect(service.createProduct).not.toHaveBeenCalled();
   });
 
   it('rejects numeric JSON prices', async () => {
