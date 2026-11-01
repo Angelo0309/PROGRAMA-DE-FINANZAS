@@ -10,4 +10,5 @@
 - Importes cobrables presentados con redondeo HALF_UP a dos decimales.
 - Imagenes de productos mediante URL HTTPS disponibles en catalogo e historial de compras.
 - Catalogo web del negocio con busqueda, vista previa de imagen y alta de productos.
+- Directorio web de clientes con saldos por cuenta y registro de nuevas identidades.
 - Prisma, migracion, semillas ficticias, Docker, CI y guias de despliegue.

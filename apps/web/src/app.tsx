@@ -16,6 +16,7 @@ import {
   createApiClient,
   type AccountView,
   type ApiClient,
+  type ClientView,
   type ProductView,
   type Profile,
   type StoreAccess,
@@ -39,6 +40,13 @@ const productFormSchema = z.object({
       (value) => value === '' || /^https?:\/\/[^\s]+$/i.test(value),
       'La imagen debe usar una dirección HTTP o HTTPS.',
     ),
+});
+const clientFormSchema = z.object({
+  documentType: z.string().trim().min(1, 'Seleccione el tipo de documento.'),
+  documentNumber: z.string().trim().min(6, 'Ingrese un número de documento válido.').max(24),
+  fullName: z.string().trim().min(2, 'Ingrese el nombre completo.'),
+  phone: z.string().trim().max(32),
+  address: z.string().trim().max(255),
 });
 
 const money = (currency: string, amount: string) =>
@@ -548,6 +556,223 @@ function ProductCatalog({
   );
 }
 
+function ClientManagement({
+  api,
+  access,
+  clients,
+  setClients,
+  accounts,
+}: {
+  api: ApiClient;
+  access: StoreAccess;
+  clients: ClientView[];
+  setClients: Dispatch<SetStateAction<ClientView[]>>;
+  accounts: AccountView[];
+}) {
+  const [search, setSearch] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [documentType, setDocumentType] = useState('DNI');
+  const [documentNumber, setDocumentNumber] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const canManageClients = access.role === 'STORE_ADMIN';
+  const filteredClients = clients.filter((client) => {
+    const term = search.trim().toLocaleLowerCase('es-PE');
+    if (!term) return true;
+    return [client.fullName, client.documentNumber, client.phone ?? '']
+      .some((value) => value.toLocaleLowerCase('es-PE').includes(term));
+  });
+  const selectedClient = clients.find((client) => client.id === selectedClientId)
+    ?? filteredClients[0]
+    ?? null;
+  const accountsFor = (client: ClientView) => accounts.filter(
+    (account) => account.customerId === client.id
+      || (!account.customerId && account.customerName === client.fullName),
+  );
+  const rows = filteredClients.flatMap<{ client: ClientView; account: AccountView | null }>((client) => {
+    const clientAccounts = accountsFor(client);
+    return clientAccounts.length > 0
+      ? clientAccounts.map((account) => ({ client, account }))
+      : [{ client, account: null }];
+  });
+  const totalAvailable = accounts.reduce(
+    (sum, account) => sum + Number(account.creditLimit) - Number(account.originalOutstanding),
+    0,
+  );
+
+  function resetForm() {
+    setDocumentType('DNI');
+    setDocumentNumber('');
+    setFullName('');
+    setPhone('');
+    setAddress('');
+    setError('');
+  }
+
+  async function saveClient(event: FormEvent) {
+    event.preventDefault();
+    const parsed = clientFormSchema.safeParse({
+      documentType,
+      documentNumber,
+      fullName,
+      phone,
+      address,
+    });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Revise los datos ingresados.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const client = await api.createClient(access.storeId, {
+        documentType: parsed.data.documentType,
+        documentNumber: parsed.data.documentNumber,
+        fullName: parsed.data.fullName,
+        ...(parsed.data.phone ? { phone: parsed.data.phone } : {}),
+        ...(parsed.data.address ? { address: parsed.data.address } : {}),
+      });
+      setClients((current) => [...current, client].sort((left, right) => left.fullName.localeCompare(right.fullName, 'es')));
+      setSelectedClientId(client.id);
+      setNotice('Cliente guardado correctamente.');
+      resetForm();
+      setShowForm(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'No fue posible guardar el cliente.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="client-page">
+      <div className="page-lead">
+        <p>Consulta la identidad del cliente y los saldos oficiales de sus cuentas.</p>
+        {canManageClients && (
+          <button className="primary-button compact-button" type="button" onClick={() => setShowForm(true)}>
+            + Nuevo cliente
+          </button>
+        )}
+      </div>
+
+      {notice && <Alert severity="success">{notice}</Alert>}
+      <div className="catalog-toolbar">
+        <label className="search-field" htmlFor="client-search">
+          <span>Buscar en el directorio</span>
+          <input
+            id="client-search"
+            type="search"
+            placeholder="Nombre, documento o teléfono"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <span className="catalog-count">{filteredClients.length} de {clients.length} clientes</span>
+      </div>
+
+      <section className="metric-strip product-metrics" aria-label="Indicadores de clientes">
+        <article><span>Clientes activos</span><strong>{clients.length}</strong></article>
+        <article><span>Cuentas activas</span><strong>{accounts.length}</strong></article>
+        <article><span>Crédito disponible</span><strong>{money(access.currency, String(totalAvailable))}</strong></article>
+      </section>
+
+      <div className={showForm ? 'catalog-layout form-open' : 'catalog-layout'}>
+        <div className="client-content">
+          <section className="catalog-panel">
+            <div className="catalog-panel-heading">
+              <h2>Directorio de clientes</h2>
+              <span>Seleccione un cliente para ver sus cuentas</span>
+            </div>
+            {rows.length === 0 ? (
+              <p className="empty-state catalog-empty">No se encontraron clientes con ese criterio.</p>
+            ) : (
+              <div className="table-wrapper">
+                <table className="client-table" aria-label="Clientes y cuentas">
+                  <thead><tr><th>Cliente</th><th>Documento</th><th>Moneda</th><th>Límite</th><th>Utilizado</th><th>Disponible</th></tr></thead>
+                  <tbody>
+                    {rows.map(({ client, account }) => (
+                      <tr className={selectedClient?.id === client.id ? 'selected-row' : ''} key={`${client.id}-${account?.id ?? 'no-account'}`}>
+                        <td><button className="table-link" type="button" onClick={() => setSelectedClientId(client.id)}>{client.fullName}</button></td>
+                        <td>{client.documentType} {client.documentNumber}</td>
+                        <td>{account?.currency ?? '—'}</td>
+                        <td>{account ? money(account.currency, account.creditLimit) : 'Sin cuenta'}</td>
+                        <td>{account ? money(account.currency, account.originalOutstanding) : '—'}</td>
+                        <td>{account ? money(account.currency, String(Number(account.creditLimit) - Number(account.originalOutstanding))) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="client-detail-panel" aria-live="polite">
+            {selectedClient ? (
+              <>
+                <div className="client-identity">
+                  <div><span>Cliente seleccionado</span><h2>{selectedClient.fullName}</h2></div>
+                  <p>{selectedClient.documentType} {selectedClient.documentNumber}</p>
+                </div>
+                <div className="client-contact"><span>{selectedClient.phone || 'Sin teléfono'}</span><span>{selectedClient.address || 'Sin dirección'}</span></div>
+                <div className="selected-accounts">
+                  {accountsFor(selectedClient).length === 0 ? (
+                    <p className="empty-state">Este cliente todavía no tiene una cuenta de crédito activa.</p>
+                  ) : accountsFor(selectedClient).map((account) => (
+                    <article key={account.id}>
+                      <div><span>Cuenta</span><strong>{account.accountNumber}</strong></div>
+                      <div><span>Límite</span><strong>{money(account.currency, account.creditLimit)}</strong></div>
+                      <div><span>Capital utilizado</span><strong>{money(account.currency, account.originalOutstanding)}</strong></div>
+                      <div><span>Disponible</span><strong>{money(account.currency, String(Number(account.creditLimit) - Number(account.originalOutstanding)))}</strong></div>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : <p className="empty-state">Registre un cliente para comenzar.</p>}
+          </section>
+        </div>
+
+        {showForm && canManageClients && (
+          <aside className="product-drawer" aria-label="Nuevo cliente">
+            <div className="drawer-heading">
+              <div><p className="folio">DIRECTORIO</p><h2>Nuevo cliente</h2></div>
+              <button className="icon-button" type="button" aria-label="Cerrar formulario" onClick={() => { resetForm(); setShowForm(false); }}>×</button>
+            </div>
+            <form className="product-form" onSubmit={saveClient} noValidate>
+              <label htmlFor="client-document-type">Tipo de documento</label>
+              <select id="client-document-type" value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
+                <option value="DNI">DNI</option>
+                <option value="CE">Carné de extranjería</option>
+                <option value="RUC">RUC</option>
+              </select>
+              <label htmlFor="client-document-number">Número de documento</label>
+              <input id="client-document-number" value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} />
+              <label htmlFor="client-full-name">Nombre completo</label>
+              <input id="client-full-name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
+              <label htmlFor="client-phone">Teléfono</label>
+              <input id="client-phone" inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} />
+              <label htmlFor="client-address">Dirección</label>
+              <textarea id="client-address" value={address} onChange={(event) => setAddress(event.target.value)} />
+              <p className="field-help">La cuenta de crédito y sus condiciones se registran como una operación separada.</p>
+              {error && <Alert severity="error">{error}</Alert>}
+              <div className="drawer-actions">
+                <button className="secondary-button" type="button" onClick={() => { resetForm(); setShowForm(false); }}>Cancelar</button>
+                <button className="primary-button" type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar cliente'}</button>
+              </div>
+            </form>
+          </aside>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function BusinessWorkspace({
   api,
   profile,
@@ -561,6 +786,7 @@ function BusinessWorkspace({
 }) {
   const [accounts, setAccounts] = useState<AccountView[]>([]);
   const [products, setProducts] = useState<ProductView[]>([]);
+  const [clients, setClients] = useState<ClientView[]>([]);
   const [accountId, setAccountId] = useState('');
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState('1');
@@ -575,9 +801,10 @@ function BusinessWorkspace({
       api.listAccounts(access.storeId),
       api.listProducts(access.storeId),
       api.listClients(access.storeId),
-    ]).then(([nextAccounts, nextProducts]) => {
+    ]).then(([nextAccounts, nextProducts, nextClients]) => {
       setAccounts(nextAccounts);
       setProducts(nextProducts);
+      setClients(nextClients);
     });
   }, [access.storeId, api]);
 
@@ -630,6 +857,18 @@ function BusinessWorkspace({
         access={access}
         products={products}
         setProducts={setProducts}
+      />
+    );
+  }
+
+  if (activeSection === 'Clientes') {
+    return (
+      <ClientManagement
+        api={api}
+        access={access}
+        clients={clients}
+        setClients={setClients}
+        accounts={accounts}
       />
     );
   }
@@ -694,10 +933,12 @@ function BusinessArea({
   onLogout: () => void;
 }) {
   const [activeSection, setActiveSection] = useState('Panel del negocio');
-  const availableNavigation = ['Panel del negocio', 'Productos y servicios'];
+  const availableNavigation = ['Panel del negocio', 'Productos y servicios', 'Clientes'];
   const title = activeSection === 'Productos y servicios'
     ? 'Productos y servicios'
-    : 'Mesa de crédito';
+    : activeSection === 'Clientes'
+      ? 'Gestión de clientes'
+      : 'Mesa de crédito';
 
   return (
     <WorkspaceShell

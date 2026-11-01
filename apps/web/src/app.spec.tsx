@@ -11,7 +11,22 @@ function makeApi(profile: unknown) {
     listAudit: vi.fn().mockResolvedValue([]),
     createStore: vi.fn().mockResolvedValue({ id: 'store-1', name: 'Bodega Nueva' }),
     createInvitation: vi.fn().mockResolvedValue({ id: 'invitation-1', token: 'one-time-token' }),
-    listClients: vi.fn().mockResolvedValue([]),
+    listClients: vi.fn().mockResolvedValue([{
+      id: 'client-1',
+      documentType: 'DNI',
+      documentNumber: '70481236',
+      fullName: 'Maria Demo',
+      phone: '999111222',
+      address: 'Lima',
+    }]),
+    createClient: vi.fn().mockResolvedValue({
+      id: 'client-2',
+      documentType: 'DNI',
+      documentNumber: '76123456',
+      fullName: 'Ana Torres',
+      phone: '988776655',
+      address: 'San Miguel',
+    }),
     listProducts: vi.fn().mockResolvedValue([{
       id: 'product-1',
       sku: 'PROD-001',
@@ -30,7 +45,7 @@ function makeApi(profile: unknown) {
       currency: 'PEN',
       imageUrl: 'https://images.example.com/cafetera.jpg',
     }),
-    listAccounts: vi.fn().mockResolvedValue([{ id: 'account-1', accountNumber: 'CC-001', customerName: 'Maria Demo', creditLimit: '1000.00', originalOutstanding: '100.00', currency: 'PEN' }]),
+    listAccounts: vi.fn().mockResolvedValue([{ id: 'account-1', accountNumber: 'CC-001', customerId: 'client-1', customerName: 'Maria Demo', creditLimit: '1000.00', originalOutstanding: '100.00', currency: 'PEN' }]),
     createPurchase: vi.fn().mockResolvedValue({ id: 'purchase-1', total: '100.00' }),
     getMyAccounts: vi.fn().mockResolvedValue([{ id: 'account-1', storeName: 'Bodega Demo', accountNumber: 'CC-001', originalOutstanding: '100.00', creditLimit: '1000.00', currency: 'PEN' }]),
     getMyStatements: vi.fn().mockResolvedValue([]),
@@ -131,6 +146,45 @@ describe('App por roles', () => {
     }));
     expect(await screen.findByText('Producto guardado correctamente.')).toBeVisible();
     expect(screen.getByRole('img', { name: 'Cafetera compacta' })).toBeVisible();
+  });
+
+  it('opens client management with identity and official account balances', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    render(<App api={api as never} />);
+    await login();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Clientes' }));
+
+    expect(await screen.findByRole('heading', { name: 'Gestión de clientes' })).toBeVisible();
+    const clientTable = screen.getByRole('table', { name: 'Clientes y cuentas' });
+    expect(within(clientTable).getByText('Maria Demo')).toBeVisible();
+    expect(within(clientTable).getByText('DNI 70481236')).toBeVisible();
+    expect(within(clientTable).getByText('S/ 900.00')).toBeVisible();
+  });
+
+  it('creates a client and includes it in the business directory', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    render(<App api={api as never} />);
+    await login();
+    fireEvent.click(await screen.findByRole('button', { name: 'Clientes' }));
+    fireEvent.click(screen.getByRole('button', { name: /nuevo cliente/i }));
+
+    fireEvent.change(screen.getByLabelText(/tipo de documento/i), { target: { value: 'DNI' } });
+    fireEvent.change(screen.getByLabelText(/número de documento/i), { target: { value: '76123456' } });
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Torres' } });
+    fireEvent.change(screen.getByLabelText(/^teléfono$/i), { target: { value: '988776655' } });
+    fireEvent.change(screen.getByLabelText(/^dirección$/i), { target: { value: 'San Miguel' } });
+    fireEvent.click(screen.getByRole('button', { name: /guardar cliente/i }));
+
+    await waitFor(() => expect(api.createClient).toHaveBeenCalledWith('store-1', {
+      documentType: 'DNI',
+      documentNumber: '76123456',
+      fullName: 'Ana Torres',
+      phone: '988776655',
+      address: 'San Miguel',
+    }));
+    expect(await screen.findByText('Cliente guardado correctamente.')).toBeVisible();
+    expect(within(screen.getByRole('table', { name: 'Clientes y cuentas' })).getByRole('button', { name: 'Ana Torres' })).toBeVisible();
   });
 
   it('does not submit a purchase command twice while the first request is pending', async () => {

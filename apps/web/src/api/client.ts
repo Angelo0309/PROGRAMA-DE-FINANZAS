@@ -7,11 +7,29 @@ export type Profile = components['schemas']['Profile'];
 export interface AccountView {
   id: string;
   accountNumber: string;
+  customerId?: string;
   customerName?: string;
   storeName?: string;
   creditLimit: string;
   originalOutstanding: string;
   currency: string;
+}
+
+export interface ClientView {
+  id: string;
+  documentType: string;
+  documentNumber: string;
+  fullName: string;
+  phone: string | null;
+  address: string | null;
+}
+
+export interface CreateClientInput {
+  documentType: string;
+  documentNumber: string;
+  fullName: string;
+  phone?: string;
+  address?: string;
 }
 
 export interface ProductView {
@@ -69,7 +87,8 @@ export interface ApiClient {
     expiresAt: string;
   }): Promise<{ id: string; token: string; expiresAt?: string }>;
   listAudit(): Promise<Array<{ id: string; event: string; createdAt: string }>>;
-  listClients(storeId: string): Promise<Array<{ id: string; fullName: string }>>;
+  listClients(storeId: string): Promise<ClientView[]>;
+  createClient(storeId: string, input: CreateClientInput): Promise<ClientView>;
   listProducts(storeId: string): Promise<ProductView[]>;
   createProduct(storeId: string, input: CreateProductInput): Promise<ProductView>;
   listAccounts(storeId: string): Promise<AccountView[]>;
@@ -159,9 +178,14 @@ class HttpApiClient implements ApiClient {
   }
 
   listClients(storeId: string) {
-    return this.request<Array<{ id: string; fullName: string }>>(
-      `/stores/${storeId}/clients`,
-    );
+    return this.request<ClientView[]>(`/stores/${storeId}/clients`);
+  }
+
+  createClient(storeId: string, input: CreateClientInput) {
+    return this.request<ClientView>(`/stores/${storeId}/clients`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
   }
 
   listProducts(storeId: string) {
