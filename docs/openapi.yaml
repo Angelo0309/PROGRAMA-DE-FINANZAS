@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: CrediCuenta API
-  version: 0.5.0
+  version: 1.0.0
 servers:
   - url: http://localhost:3000/api/v1
 paths:
@@ -13,31 +13,31 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginInput'
+              $ref: "#/components/schemas/LoginInput"
       responses:
-        '201':
+        "201":
           description: Sesion creada
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TokenPair'
+                $ref: "#/components/schemas/TokenPair"
   /me/profile:
     get:
       operationId: getProfile
       security: [{ bearerAuth: [] }]
       responses:
-        '200':
+        "200":
           description: Perfil y accesos
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Profile'
+                $ref: "#/components/schemas/Profile"
   /platform/stores:
     get:
       operationId: listStores
       security: [{ bearerAuth: [] }]
       responses:
-        '200':
+        "200":
           description: Tiendas
     post:
       operationId: createStore
@@ -55,74 +55,74 @@ paths:
                 currency: { type: string }
                 timeZone: { type: string }
       responses:
-        '201': { description: Tienda creada }
+        "201": { description: Tienda creada }
   /platform/invitations:
     post:
       operationId: createInvitation
       security: [{ bearerAuth: [] }]
       responses:
-        '201': { description: Invitacion creada; token visible una sola vez }
+        "201": { description: Invitacion creada; token visible una sola vez }
   /platform/audit:
     get:
       operationId: listAudit
       security: [{ bearerAuth: [] }]
       responses:
-        '200':
+        "200":
           description: Eventos auditados
   /stores/{storeId}/clients:
     get:
       operationId: listClients
       security: [{ bearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/storeId'
+        - $ref: "#/components/parameters/storeId"
       responses:
-        '200': { description: Clientes }
+        "200": { description: Clientes }
   /stores/{storeId}/products:
     get:
       operationId: listProducts
       security: [{ bearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/storeId'
+        - $ref: "#/components/parameters/storeId"
       responses:
-        '200': { description: Productos }
+        "200": { description: Productos }
   /stores/{storeId}/accounts:
     get:
       operationId: listAccounts
       security: [{ bearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/storeId'
+        - $ref: "#/components/parameters/storeId"
       responses:
-        '200': { description: Cuentas }
+        "200": { description: Cuentas }
   /stores/{storeId}/purchases:
     post:
       operationId: createPurchase
       security: [{ bearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/storeId'
+        - $ref: "#/components/parameters/storeId"
         - name: Idempotency-Key
           in: header
           required: true
           schema: { type: string }
       responses:
-        '201': { description: Compra registrada }
+        "201": { description: Compra registrada }
   /me/accounts:
     get:
       operationId: getMyAccounts
       security: [{ bearerAuth: [] }]
       responses:
-        '200': { description: Cuentas del cliente }
+        "200": { description: Cuentas del cliente }
   /me/statements:
     get:
       operationId: getMyStatements
       security: [{ bearerAuth: [] }]
       responses:
-        '200': { description: Estados del cliente }
+        "200": { description: Estados del cliente }
   /me/purchases:
     get:
       operationId: getMyPurchases
       security: [{ bearerAuth: [] }]
       responses:
-        '200': { description: Compras del cliente }
+        "200": { description: Compras del cliente }
 components:
   securitySchemes:
     bearerAuth:
@@ -139,7 +139,7 @@ components:
     DecimalString:
       type: string
       pattern: '^\\d+(?:\\.\\d+)?$'
-      example: '120.00'
+      example: "120.00"
     LoginInput:
       type: object
       required: [identifier, password]
@@ -177,4 +177,4 @@ components:
         storeAccesses:
           type: array
           items:
-            $ref: '#/components/schemas/StoreAccess'
+            $ref: "#/components/schemas/StoreAccess"

@@ -1,0 +1,32 @@
+@baseUrl = http://localhost:3000/api/v1
+
+### Salud del proceso
+GET {{baseUrl}}/health/live
+
+### Salud de la base
+GET {{baseUrl}}/health/ready
+
+### @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "negocio@credicuenta.test",
+  "password": "DemoSegura#2026"
+}
+
+### Copie accessToken y refreshToken de la respuesta anterior.
+@accessToken = PEGAR_ACCESS_TOKEN_AQUI
+@storeId = 10000000-0000-4000-8000-000000000001
+
+### Perfil y roles
+GET {{baseUrl}}/me/profile
+Authorization: Bearer {{accessToken}}
+
+### Productos de la tienda ficticia
+GET {{baseUrl}}/stores/{{storeId}}/products
+Authorization: Bearer {{accessToken}}
+
+### Cuentas de la tienda ficticia
+GET {{baseUrl}}/stores/{{storeId}}/accounts
+Authorization: Bearer {{accessToken}}
