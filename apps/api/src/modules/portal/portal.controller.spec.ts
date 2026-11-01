@@ -30,6 +30,11 @@ describe('portal controllers', () => {
     }),
     listAudit: vi.fn().mockResolvedValue([]),
     getMyAccounts: vi.fn().mockResolvedValue([{ id: 'account-1' }]),
+    getMyProfile: vi.fn().mockResolvedValue({
+      id: 'platform-admin-1',
+      platformRole: 'PLATFORM_ADMIN',
+      storeAccesses: [],
+    }),
     getMyStatements: vi.fn().mockResolvedValue([]),
     getMyPurchases: vi.fn().mockResolvedValue([]),
   };
@@ -75,5 +80,13 @@ describe('portal controllers', () => {
   it('derives client portal ownership from the authenticated user', async () => {
     await request(app.getHttpServer()).get('/api/v1/me/accounts').expect(200);
     expect(service.getMyAccounts).toHaveBeenCalledWith('platform-admin-1');
+  });
+
+  it('returns the authenticated profile used for role routing', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/me/profile')
+      .expect(200);
+    expect(response.body.platformRole).toBe('PLATFORM_ADMIN');
+    expect(service.getMyProfile).toHaveBeenCalledWith('platform-admin-1');
   });
 });

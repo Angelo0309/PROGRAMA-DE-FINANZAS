@@ -108,6 +108,11 @@ export class PlatformController {
 export class MeController {
   constructor(private readonly service: PortalService) {}
 
+  @Get('profile')
+  getProfile(@Req() request: AuthenticatedRequest) {
+    return this.service.getMyProfile(request.user.sub);
+  }
+
   @Get('accounts')
   getAccounts(@Req() request: AuthenticatedRequest) {
     return this.service.getMyAccounts(request.user.sub);

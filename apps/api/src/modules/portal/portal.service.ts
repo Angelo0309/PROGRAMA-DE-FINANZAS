@@ -8,6 +8,31 @@ import { PrismaService } from '../../database/prisma.service.js';
 export class PortalService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getMyProfile(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: {
+        accesses: {
+          where: { active: true },
+          include: { store: { select: { name: true, currency: true } } },
+        },
+      },
+    });
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      displayName: user.displayName,
+      platformRole: user.platformRole,
+      storeAccesses: user.accesses.map((access) => ({
+        storeId: access.storeId,
+        storeName: access.store.name,
+        currency: access.store.currency,
+        role: access.role,
+      })),
+    };
+  }
+
   listStores() {
     return this.prisma.store.findMany({ orderBy: { name: 'asc' } });
   }
