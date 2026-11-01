@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -110,6 +111,16 @@ export class BusinessController {
     );
   }
 
+  @Delete('stores/:storeId/clients/:clientId')
+  @StoreRoles('STORE_ADMIN')
+  deactivateClient(
+    @Param('storeId') storeId: string,
+    @Param('clientId') clientId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.service.deactivateClient(storeId, clientId, request.user.sub);
+  }
+
   @Get('stores/:storeId/products')
   listProducts(@Param('storeId') storeId: string) {
     return this.service.listProducts(storeId);
@@ -139,6 +150,16 @@ export class BusinessController {
     );
   }
 
+  @Delete('stores/:storeId/products/:productId')
+  @StoreRoles('STORE_ADMIN')
+  deactivateProduct(
+    @Param('storeId') storeId: string,
+    @Param('productId') productId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.service.deactivateProduct(storeId, productId, request.user.sub);
+  }
+
   @Get('stores/:storeId/accounts')
   listAccounts(@Param('storeId') storeId: string) {
     return this.service.listAccounts(storeId);
@@ -156,6 +177,16 @@ export class BusinessController {
       parse(accountSchema, body),
       request.user.sub,
     );
+  }
+
+  @Delete('stores/:storeId/accounts/:accountId')
+  @StoreRoles('STORE_ADMIN')
+  deactivateAccount(
+    @Param('storeId') storeId: string,
+    @Param('accountId') accountId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.service.deactivateAccount(storeId, accountId, request.user.sub);
   }
 
   @Post('accounts/:accountId/credit-conditions')

@@ -72,9 +72,40 @@ describe('assignBillingCycle', () => {
     expect(cycle.basePaymentDate).toBe('2026-10-26');
     expect(cycle.firstInstallmentDate).toBe('2026-11-26');
   });
+
+  it('clamps a configured day 30 to the last real day of February', () => {
+    const cycle = assignBillingCycle({
+      purchasedAt: '2027-02-20T10:00:00-05:00',
+      cutDay: 25,
+      cutTime: '23:59:59',
+      paymentDay: 30,
+      zone: 'America/Lima',
+    });
+
+    expect(cycle.basePaymentDate).toBe('2027-02-28');
+    expect(cycle.firstInstallmentDate).toBe('2027-03-30');
+  });
 });
 
 describe('calculateEndOfMonthObligation', () => {
+  it('matches the pre-cutoff 500-sol acceptance case', () => {
+    const dailyRate = toEffectiveDailyRate({
+      rate: '0.24',
+      kind: 'EFFECTIVE',
+      baseDays: 360,
+    });
+    const obligation = calculateEndOfMonthObligation({
+      principal: '500',
+      purchaseDate: '2026-09-15',
+      paymentDate: '2026-09-26',
+      dailyRate,
+    });
+
+    expect(obligation.days).toBe(11);
+    expect(obligation.interest.toDecimalPlaces(2).toFixed(2)).toBe('3.30');
+    expect(obligation.amount.toDecimalPlaces(2).toFixed(2)).toBe('503.30');
+  });
+
   it('capitalizes a post-cutoff purchase until the next payment date', () => {
     const dailyRate = toEffectiveDailyRate({
       rate: '0.24',

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CreditOperationsService } from './credit-operations.service.js';
 import { billingCutForDueDate } from './billing-cut.js';
+import { calculateAmountDue } from '../finance/domain/financial-engine.js';
 import {
   type AccountSnapshot,
   type CreditConditionSnapshot,
@@ -317,6 +318,34 @@ describe('CreditOperationsService', () => {
     expect(await service.createPayment(input)).toBe(payment);
   });
 
+  it('blocks new purchases on a deactivated account but still permits debt collection', async () => {
+    const purchase = await service.createPurchase({
+      ...basePurchase,
+      idempotencyKey: 'before-account-deactivation',
+    });
+    repository.account.active = false;
+
+    await expect(
+      service.createPurchase({
+        ...basePurchase,
+        idempotencyKey: 'after-account-deactivation',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+
+    const obligation = purchase.obligations[0]!;
+    await expect(
+      service.createPayment({
+        storeId: 'store-1',
+        accountId: 'account-1',
+        operatorUserId: 'operator-1',
+        idempotencyKey: 'deactivated-account-payment',
+        paidAt: `${obligation.dueDate}T12:00:00-05:00`,
+        currency: 'PEN',
+        amount: new Decimal(obligation.amountDue).toFixed(2),
+      }),
+    ).resolves.toMatchObject({ amount: '100.00' });
+  });
+
   it('keeps capitalized grace interest out of original-credit recovery', async () => {
     repository.products[0]!.unitPrice = '1200.00';
     repository.account.creditLimit = '2000.00';
@@ -373,6 +402,57 @@ describe('CreditOperationsService', () => {
     }
 
     expect(repository.account.originalOutstanding).toBe('0');
+  });
+
+  it('requires one payment for every overdue obligation and excludes future debt', async () => {
+    repository.condition.lateRate = '0.36';
+    const first = await service.createPurchase({
+      ...basePurchase,
+      idempotencyKey: 'accumulated-first',
+      purchasedAt: '2026-10-20T10:00:00-05:00',
+    });
+    const second = await service.createPurchase({
+      ...basePurchase,
+      idempotencyKey: 'accumulated-second',
+      purchasedAt: '2026-11-20T10:00:00-05:00',
+    });
+    const paidAt = '2026-12-10';
+    const payable = [first.obligations[0]!, second.obligations[0]!];
+    const due = calculateAmountDue({
+      paidAt,
+      obligations: payable.map((obligation) => ({
+        id: obligation.id,
+        dueDate: obligation.dueDate,
+        baseAmount: obligation.amountDue,
+        compensatoryInterest: obligation.compensatoryInterest,
+        originalPrincipal: obligation.principalDue,
+        lateDailyRate: new Decimal(obligation.lateDailyRate),
+      })),
+    });
+
+    await expect(
+      service.createPayment({
+        storeId: 'store-1',
+        accountId: 'account-1',
+        operatorUserId: 'operator-1',
+        idempotencyKey: 'partial-accumulated-payment',
+        paidAt: `${paidAt}T12:00:00-05:00`,
+        currency: 'PEN',
+        amount: new Decimal(second.obligations[0]!.amountDue).toFixed(2),
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+
+    const payment = await service.createPayment({
+      storeId: 'store-1',
+      accountId: 'account-1',
+      operatorUserId: 'operator-1',
+      idempotencyKey: 'complete-accumulated-payment',
+      paidAt: `${paidAt}T12:00:00-05:00`,
+      currency: 'PEN',
+      amount: due.moneyTotal,
+    });
+    expect(payment.allocations).toHaveLength(2);
+    expect(payment.allocations.every((allocation) => new Decimal(allocation.lateInterestPaid).gt(0))).toBe(true);
   });
 
   it('retries transient serialization conflicts at most three times', async () => {

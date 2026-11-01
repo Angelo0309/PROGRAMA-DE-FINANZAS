@@ -201,7 +201,7 @@ export class CreditOperationsService {
       const repeated = await transaction.findCutByIdempotency(input.storeId, input.idempotencyKey);
       if (repeated) return repeated;
       const account = await transaction.getAccount(input.storeId, input.accountId);
-      if (!account?.active) throw new NotFoundException('Cuenta de crédito no encontrada.');
+      if (!account) throw new NotFoundException('Cuenta de crédito no encontrada.');
       const cutAt = DateTime.fromISO(input.cutAt, { setZone: true }).setZone('America/Lima');
       if (!cutAt.isValid) throw new BadRequestException('Instante de corte inválido.');
       const obligations = await transaction.listObligationsForCut(input.accountId, input.cutAt);
@@ -243,7 +243,7 @@ export class CreditOperationsService {
       );
       if (repeated) return repeated;
       const account = await transaction.getAccount(input.storeId, input.accountId);
-      if (!account?.active) throw new NotFoundException('Cuenta de crédito no encontrada.');
+      if (!account) throw new NotFoundException('Cuenta de crédito no encontrada.');
       if (account.currency !== input.currency) {
         throw new BadRequestException('La moneda no coincide con la cuenta.');
       }

@@ -2,8 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
+  Param,
   Post,
   Query,
   Req,
@@ -76,6 +78,14 @@ export class PlatformController {
       },
       request.user.sub,
     );
+  }
+
+  @Delete('stores/:storeId')
+  deactivateStore(
+    @Param('storeId') storeId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.service.deactivateStore(storeId, request.user.sub);
   }
 
   @Post('invitations')

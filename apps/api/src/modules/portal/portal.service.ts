@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service.js';
 
@@ -34,7 +34,10 @@ export class PortalService {
   }
 
   listStores() {
-    return this.prisma.store.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.store.findMany({
+      where: { active: true },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async createStore(
@@ -59,6 +62,44 @@ export class PortalService {
         },
       });
       return store;
+    });
+  }
+
+  deactivateStore(storeId: string, actorId: string) {
+    return this.prisma.$transaction(async (transaction) => {
+      const result = await transaction.store.updateMany({
+        where: { id: storeId, active: true },
+        data: { active: false },
+      });
+      if (result.count === 0) throw new NotFoundException('Tienda no encontrada.');
+      await Promise.all([
+        transaction.storeAccess.updateMany({
+          where: { storeId, active: true },
+          data: { active: false },
+        }),
+        transaction.customer.updateMany({
+          where: { storeId, active: true },
+          data: { active: false },
+        }),
+        transaction.productService.updateMany({
+          where: { storeId, active: true },
+          data: { active: false },
+        }),
+        transaction.creditAccount.updateMany({
+          where: { storeId, active: true },
+          data: { active: false },
+        }),
+      ]);
+      await transaction.auditEvent.create({
+        data: {
+          storeId,
+          userId: actorId,
+          event: 'STORE_DEACTIVATED',
+          entity: 'TIENDA',
+          entityId: storeId,
+        },
+      });
+      return { id: storeId, active: false };
     });
   }
 

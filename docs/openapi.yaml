@@ -56,6 +56,15 @@ paths:
                 timeZone: { type: string }
       responses:
         "201": { description: Tienda creada }
+  /platform/stores/{storeId}:
+    delete:
+      operationId: deactivateStore
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+      responses:
+        "200": { description: Tienda desactivada logicamente }
+        "404": { description: Tienda activa no encontrada }
   /platform/invitations:
     post:
       operationId: createInvitation
@@ -77,6 +86,16 @@ paths:
         - $ref: "#/components/parameters/storeId"
       responses:
         "200": { description: Clientes }
+  /stores/{storeId}/clients/{clientId}:
+    delete:
+      operationId: deactivateClient
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+        - $ref: "#/components/parameters/clientId"
+      responses:
+        "200": { description: Cliente y cuentas activas desactivados logicamente }
+        "404": { description: Cliente activo no encontrado }
   /stores/{storeId}/products:
     get:
       operationId: listProducts
@@ -85,6 +104,16 @@ paths:
         - $ref: "#/components/parameters/storeId"
       responses:
         "200": { description: Productos }
+  /stores/{storeId}/products/{productId}:
+    delete:
+      operationId: deactivateProduct
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+        - $ref: "#/components/parameters/productId"
+      responses:
+        "200": { description: Producto o servicio desactivado logicamente }
+        "404": { description: Producto o servicio activo no encontrado }
   /stores/{storeId}/accounts:
     get:
       operationId: listAccounts
@@ -93,6 +122,16 @@ paths:
         - $ref: "#/components/parameters/storeId"
       responses:
         "200": { description: Cuentas }
+  /stores/{storeId}/accounts/{accountId}:
+    delete:
+      operationId: deactivateAccount
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+        - $ref: "#/components/parameters/accountId"
+      responses:
+        "200": { description: Cuenta de credito desactivada logicamente }
+        "404": { description: Cuenta activa no encontrada }
   /stores/{storeId}/purchases:
     post:
       operationId: createPurchase
@@ -132,6 +171,21 @@ components:
   parameters:
     storeId:
       name: storeId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    clientId:
+      name: clientId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    productId:
+      name: productId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    accountId:
+      name: accountId
       in: path
       required: true
       schema: { type: string, format: uuid }

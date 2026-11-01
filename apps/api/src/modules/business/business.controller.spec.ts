@@ -35,6 +35,9 @@ describe('BusinessController', () => {
     getSchedule: vi.fn().mockResolvedValue([]),
     getStatements: vi.fn().mockResolvedValue([]),
     getReceipt: vi.fn(),
+    deactivateClient: vi.fn().mockResolvedValue({ id: 'client-1', active: false }),
+    deactivateProduct: vi.fn().mockResolvedValue({ id: 'product-1', active: false }),
+    deactivateAccount: vi.fn().mockResolvedValue({ id: 'account-1', active: false }),
   };
 
   beforeEach(async () => {
@@ -91,5 +94,21 @@ describe('BusinessController', () => {
     expect(Reflect.getMetadata(STORE_ROLES, BusinessController.prototype.createProduct)).toEqual([
       'STORE_ADMIN',
     ]);
+  });
+
+  it('exposes audited logical deletion commands for store administrators', async () => {
+    await request(app.getHttpServer())
+      .delete('/api/v1/stores/store-1/clients/client-1')
+      .expect(200);
+    await request(app.getHttpServer())
+      .delete('/api/v1/stores/store-1/products/product-1')
+      .expect(200);
+    await request(app.getHttpServer())
+      .delete('/api/v1/stores/store-1/accounts/account-1')
+      .expect(200);
+
+    expect(service.deactivateClient).toHaveBeenCalledWith('store-1', 'client-1', 'admin-1');
+    expect(service.deactivateProduct).toHaveBeenCalledWith('store-1', 'product-1', 'admin-1');
+    expect(service.deactivateAccount).toHaveBeenCalledWith('store-1', 'account-1', 'admin-1');
   });
 });

@@ -28,6 +28,7 @@ describe('portal controllers', () => {
       token: 'plain-token-returned-once',
       expiresAt: '2026-11-01T00:00:00.000Z',
     }),
+    deactivateStore: vi.fn().mockResolvedValue({ id: 'store-1', active: false }),
     listAudit: vi.fn().mockResolvedValue([]),
     getMyAccounts: vi.fn().mockResolvedValue([{ id: 'account-1' }]),
     getMyProfile: vi.fn().mockResolvedValue({
@@ -88,5 +89,12 @@ describe('portal controllers', () => {
       .expect(200);
     expect(response.body.platformRole).toBe('PLATFORM_ADMIN');
     expect(service.getMyProfile).toHaveBeenCalledWith('platform-admin-1');
+  });
+
+  it('exposes logical store deletion for platform administrators', async () => {
+    await request(app.getHttpServer())
+      .delete('/api/v1/platform/stores/store-1')
+      .expect(200);
+    expect(service.deactivateStore).toHaveBeenCalledWith('store-1', 'platform-admin-1');
   });
 });

@@ -58,6 +58,30 @@ export class BusinessService {
     });
   }
 
+  deactivateClient(storeId: string, clientId: string, actorId: string) {
+    return this.prisma.$transaction(async (transaction) => {
+      const result = await transaction.customer.updateMany({
+        where: { id: clientId, storeId, active: true },
+        data: { active: false },
+      });
+      if (result.count === 0) throw new NotFoundException('Cliente no encontrado.');
+      await transaction.creditAccount.updateMany({
+        where: { customerId: clientId, storeId, active: true },
+        data: { active: false },
+      });
+      await transaction.auditEvent.create({
+        data: {
+          storeId,
+          userId: actorId,
+          event: 'CLIENT_DEACTIVATED',
+          entity: 'CLIENTE',
+          entityId: clientId,
+        },
+      });
+      return { id: clientId, active: false };
+    });
+  }
+
   async listProducts(storeId: string) {
     const products = await this.prisma.productService.findMany({
       where: { storeId, active: true },
@@ -108,6 +132,26 @@ export class BusinessService {
         currency: product.currency,
         imageUrl: product.imageUrl,
       };
+    });
+  }
+
+  deactivateProduct(storeId: string, productId: string, actorId: string) {
+    return this.prisma.$transaction(async (transaction) => {
+      const result = await transaction.productService.updateMany({
+        where: { id: productId, storeId, active: true },
+        data: { active: false },
+      });
+      if (result.count === 0) throw new NotFoundException('Producto o servicio no encontrado.');
+      await transaction.auditEvent.create({
+        data: {
+          storeId,
+          userId: actorId,
+          event: 'PRODUCT_DEACTIVATED',
+          entity: 'PRODUCTO_SERVICIO',
+          entityId: productId,
+        },
+      });
+      return { id: productId, active: false };
     });
   }
 
@@ -163,6 +207,26 @@ export class BusinessService {
         creditLimit: account.creditLimit.toFixed(2),
         originalOutstanding: account.originalOutstanding.toFixed(2),
       };
+    });
+  }
+
+  deactivateAccount(storeId: string, accountId: string, actorId: string) {
+    return this.prisma.$transaction(async (transaction) => {
+      const result = await transaction.creditAccount.updateMany({
+        where: { id: accountId, storeId, active: true },
+        data: { active: false },
+      });
+      if (result.count === 0) throw new NotFoundException('Cuenta no encontrada.');
+      await transaction.auditEvent.create({
+        data: {
+          storeId,
+          userId: actorId,
+          event: 'CREDIT_ACCOUNT_DEACTIVATED',
+          entity: 'CUENTA_CREDITO',
+          entityId: accountId,
+        },
+      });
+      return { id: accountId, active: false };
     });
   }
 
