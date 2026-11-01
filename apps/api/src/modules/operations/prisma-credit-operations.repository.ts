@@ -4,6 +4,7 @@ import { Decimal } from 'decimal.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { toEffectiveDailyRate } from '../finance/domain/financial-engine.js';
+import { billingCutForDueDate } from './billing-cut.js';
 import {
   type AccountSnapshot,
   type CreditConditionSnapshot,
@@ -210,25 +211,45 @@ class PrismaCreditOperationsTransaction implements CreditOperationsTransaction {
   async listObligationsForCut(accountId: string, cutAt: string) {
     const obligations = await this.transaction.obligation.findMany({
       where: {
-        credit: {
-          accountId,
-          purchase: {
-            assignedCutAt: { lte: asDate(cutAt) },
-            mode: 'END_OF_MONTH',
-          },
-        },
+        credit: { accountId },
         cutDetails: { none: {} },
         status: { in: ['PENDING', 'OVERDUE'] },
       },
-      include: { credit: { select: { lateDailyRate: true } } },
+      include: {
+        credit: {
+          select: {
+            lateDailyRate: true,
+            purchase: {
+              select: {
+                mode: true,
+                assignedCutAt: true,
+                condition: { select: { billingDay: true } },
+              },
+            },
+          },
+        },
+      },
       orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
     });
-    return obligations.map((obligation) =>
-      mapObligation({
-        ...obligation,
-        lateDailyRate: obligation.credit.lateDailyRate,
-      }),
-    );
+    const cutInstant = asDate(cutAt).getTime();
+    return obligations
+      .filter((obligation) => {
+        const purchase = obligation.credit.purchase;
+        if (purchase.mode === 'END_OF_MONTH') {
+          return purchase.assignedCutAt.getTime() === cutInstant;
+        }
+        const obligationCut = billingCutForDueDate(
+          obligation.dueDate.toISOString().slice(0, 10),
+          purchase.condition.billingDay,
+        );
+        return asDate(obligationCut).getTime() === cutInstant;
+      })
+      .map((obligation) =>
+        mapObligation({
+          ...obligation,
+          lateDailyRate: obligation.credit.lateDailyRate,
+        }),
+      );
   }
 
   async listPayableObligations(accountId: string, paidOn: string) {

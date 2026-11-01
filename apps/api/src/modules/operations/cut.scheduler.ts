@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { PrismaService } from '../../database/prisma.service.js';
 import { CreditOperationsService } from './credit-operations.service.js';
+import { billingCutForDueDate } from './billing-cut.js';
 
 @Injectable()
 export class CutScheduler {
@@ -22,25 +23,57 @@ export class CutScheduler {
   async runDueCuts(now: Date): Promise<void> {
     const purchases = await this.prisma.purchase.findMany({
       where: {
-        assignedCutAt: { lte: now },
-        mode: 'END_OF_MONTH',
         credit: {
           obligations: {
             some: { cutDetails: { none: {} }, status: { in: ['PENDING', 'OVERDUE'] } },
           },
         },
       },
-      select: { storeId: true, accountId: true, assignedCutAt: true },
+      select: {
+        storeId: true,
+        accountId: true,
+        assignedCutAt: true,
+        mode: true,
+        condition: { select: { billingDay: true } },
+        credit: {
+          select: {
+            obligations: {
+              where: {
+                cutDetails: { none: {} },
+                status: { in: ['PENDING', 'OVERDUE'] },
+              },
+              select: { dueDate: true },
+            },
+          },
+        },
+      },
       orderBy: { assignedCutAt: 'asc' },
     });
     const dueCuts = new Map(
-      purchases.map((purchase) => {
-        const cutAt = purchase.assignedCutAt.toISOString();
-        return [
-          `${purchase.accountId}:${cutAt}`,
-          { ...purchase, cutAt },
-        ] as const;
-      }),
+      purchases
+        .flatMap((purchase) => {
+          const cutDates =
+            purchase.mode === 'END_OF_MONTH'
+              ? [purchase.assignedCutAt.toISOString()]
+              : (purchase.credit?.obligations ?? []).map((obligation) =>
+                  new Date(
+                    billingCutForDueDate(
+                      obligation.dueDate.toISOString().slice(0, 10),
+                      purchase.condition.billingDay,
+                    ),
+                  ).toISOString(),
+                );
+          return cutDates.map((cutAt) => ({
+            storeId: purchase.storeId,
+            accountId: purchase.accountId,
+            cutAt,
+          }));
+        })
+        .filter((candidate) => new Date(candidate.cutAt) <= now)
+        .map((candidate) => [
+          `${candidate.accountId}:${candidate.cutAt}`,
+          candidate,
+        ] as const),
     );
 
     for (const due of dueCuts.values()) {

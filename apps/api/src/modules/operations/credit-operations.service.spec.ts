@@ -2,6 +2,7 @@ import { Decimal } from 'decimal.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { CreditOperationsService } from './credit-operations.service.js';
+import { billingCutForDueDate } from './billing-cut.js';
 import {
   type AccountSnapshot,
   type CreditConditionSnapshot,
@@ -94,11 +95,17 @@ class MemoryOperationsRepository
     return this.purchases
       .filter(
         (purchase) =>
-          purchase.accountId === accountId &&
-          purchase.mode === 'END_OF_MONTH' &&
-          purchase.assignedCutAt <= cutAt,
+          purchase.accountId === accountId,
       )
-      .flatMap((purchase) => purchase.obligations)
+      .flatMap((purchase) =>
+        purchase.obligations.filter((obligation) => {
+          const expectedCut =
+            purchase.mode === 'END_OF_MONTH'
+              ? purchase.assignedCutAt
+              : billingCutForDueDate(obligation.dueDate, this.condition.billingDay);
+          return new Date(expectedCut).getTime() === new Date(cutAt).getTime();
+        }),
+      )
       .filter((obligation) => !this.cuts.some((cut) => cut.obligationIds.includes(obligation.id)));
   }
   async listPayableObligations(accountId: string, paidOn: string) {
@@ -231,6 +238,26 @@ describe('CreditOperationsService', () => {
 
     expect(cut.obligationIds).toEqual([]);
     expect(cut.totalDue).toBe('0.00');
+  });
+
+  it('exposes each installment in the monthly cut preceding its due date', async () => {
+    const purchase = await service.createPurchase({
+      ...basePurchase,
+      mode: 'INSTALLMENTS',
+      installmentCount: 3,
+      idempotencyKey: 'monthly-installments',
+    });
+    const first = purchase.obligations[0]!;
+    const cutAt = billingCutForDueDate(first.dueDate, repository.condition.billingDay);
+    const cut = await service.createCut({
+      storeId: 'store-1',
+      accountId: 'account-1',
+      idempotencyKey: 'first-installment-cut',
+      cutAt,
+    });
+
+    expect(cut.obligationIds).toEqual([first.id]);
+    expect(cut.totalDue).toBe(new Decimal(first.amountDue).toFixed(2));
   });
 
   it('audits purchases, cuts and payments with their actor when available', async () => {

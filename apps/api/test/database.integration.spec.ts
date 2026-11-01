@@ -7,6 +7,7 @@ import { AuthService } from '../src/modules/auth/auth.service.js';
 import { PrismaAuthRepository } from '../src/modules/auth/prisma-auth.repository.js';
 import { CreditOperationsService } from '../src/modules/operations/credit-operations.service.js';
 import { PrismaCreditOperationsRepository } from '../src/modules/operations/prisma-credit-operations.repository.js';
+import { billingCutForDueDate } from '../src/modules/operations/billing-cut.js';
 
 const integration = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -107,7 +108,115 @@ integration('MariaDB integration', () => {
         amount: payment.amount,
       })).id,
     ).toBe(payment.id);
+    await expect(
+      prisma.auditEvent.findMany({
+        where: { entityId: { in: [purchase.id, cut.id, payment.id] } },
+        select: { event: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ).resolves.toEqual([
+      { event: 'PURCHASE_CREATED' },
+      { event: 'CUT_CREATED' },
+      { event: 'PAYMENT_CREATED' },
+    ]);
   });
+
+  it('places only the installment due for a monthly cut in its statement', async () => {
+    const repository = new PrismaCreditOperationsRepository(prisma);
+    const operations = new CreditOperationsService(repository, randomUUID);
+    const store = await prisma.store.findUniqueOrThrow({ where: { taxId: '20123456789' } });
+    const account = await prisma.creditAccount.findUniqueOrThrow({
+      where: { storeId_accountNumber: { storeId: store.id, accountNumber: 'CC-000001' } },
+    });
+    const product = await prisma.productService.findUniqueOrThrow({
+      where: { storeId_sku: { storeId: store.id, sku: 'PROD-001' } },
+    });
+    const key = randomUUID();
+    const purchase = await operations.createPurchase({
+      storeId: store.id,
+      accountId: account.id,
+      operatorUserId: '20000000-0000-4000-8000-000000000002',
+      idempotencyKey: `installment-purchase-${key}`,
+      purchasedAt: '2026-10-20T10:00:00-05:00',
+      currency: 'PEN',
+      mode: 'INSTALLMENTS',
+      installmentCount: 3,
+      items: [{ productId: product.id, quantity: '1' }],
+    });
+    const first = purchase.obligations[0]!;
+    const cut = await operations.createCut({
+      storeId: store.id,
+      accountId: account.id,
+      operatorUserId: '20000000-0000-4000-8000-000000000002',
+      idempotencyKey: `installment-cut-${key}`,
+      cutAt: billingCutForDueDate(first.dueDate, 26),
+    });
+
+    expect(cut.obligationIds).toEqual([first.id]);
+
+    for (const [index, obligation] of purchase.obligations.entries()) {
+      await operations.createPayment({
+        storeId: store.id,
+        accountId: account.id,
+        operatorUserId: '20000000-0000-4000-8000-000000000002',
+        idempotencyKey: `installment-payment-${key}-${index}`,
+        paidAt: `${obligation.dueDate}T12:00:00-05:00`,
+        currency: 'PEN',
+        amount: new Decimal(obligation.amountDue).toFixed(2),
+      });
+    }
+    const refreshedAccount = await prisma.creditAccount.findUniqueOrThrow({
+      where: { id_storeId: { id: account.id, storeId: store.id } },
+      select: { originalOutstanding: true },
+    });
+    expect(refreshedAccount.originalOutstanding.toString()).toBe('0');
+  });
+
+  it('serializes simultaneous purchases so the credit limit cannot be exceeded', async () => {
+    const operations = new CreditOperationsService(
+      new PrismaCreditOperationsRepository(prisma),
+      randomUUID,
+    );
+    const store = await prisma.store.findUniqueOrThrow({ where: { taxId: '20123456789' } });
+    const account = await prisma.creditAccount.findUniqueOrThrow({
+      where: { storeId_accountNumber: { storeId: store.id, accountNumber: 'CC-000001' } },
+    });
+    const product = await prisma.productService.findUniqueOrThrow({
+      where: { storeId_sku: { storeId: store.id, sku: 'PROD-001' } },
+    });
+    const key = randomUUID();
+    const base = {
+      storeId: store.id,
+      accountId: account.id,
+      operatorUserId: '20000000-0000-4000-8000-000000000002',
+      purchasedAt: '2026-10-20T10:00:00-05:00',
+      currency: 'PEN',
+      mode: 'END_OF_MONTH' as const,
+      items: [{ productId: product.id, quantity: '20' }],
+    };
+    const results = await Promise.allSettled([
+      operations.createPurchase({ ...base, idempotencyKey: `concurrent-a-${key}` }),
+      operations.createPurchase({ ...base, idempotencyKey: `concurrent-b-${key}` }),
+    ]);
+    const successful = results.filter(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof operations.createPurchase>>> =>
+        result.status === 'fulfilled',
+    );
+
+    expect(successful).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+
+    const obligation = successful[0]!.value.obligations[0]!;
+    await operations.createPayment({
+      storeId: store.id,
+      accountId: account.id,
+      operatorUserId: '20000000-0000-4000-8000-000000000002',
+      idempotencyKey: `concurrent-cleanup-${key}`,
+      paidAt: `${obligation.dueDate}T12:00:00-05:00`,
+      currency: 'PEN',
+      amount: new Decimal(obligation.amountDue).toFixed(2),
+    });
+  }, 15_000);
 });
 import { randomUUID } from 'node:crypto';
 
