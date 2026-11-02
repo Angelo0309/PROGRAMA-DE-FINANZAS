@@ -10,6 +10,12 @@ if (!process.env.DATABASE_URL) {
 }
 
 const sourceUrl = new URL(process.env.DATABASE_URL);
+const expectedTables = new Set([
+  '_prisma_migrations', 'acceso_tienda', 'auditoria', 'cliente', 'compra',
+  'condicion_crediticia', 'corte', 'credito', 'cuenta_credito', 'detalle_compra',
+  'detalle_corte', 'detalle_pago', 'invitacion_usuario', 'obligacion', 'pago',
+  'producto_servicio', 'sesion_refresh', 'tienda', 'usuario',
+]);
 let testDatabase = 'credicuenta_test';
 const connectionOptions = {
   host: sourceUrl.hostname,
@@ -28,22 +34,33 @@ try {
   } catch (error) {
     if (error?.code !== 'ER_DBACCESS_DENIED_ERROR') throw error;
     testDatabase = 'test';
-    const fallback = await mariadb.createConnection({ ...connectionOptions, database: testDatabase });
-    try {
-      const tables = await fallback.query('SHOW TABLES');
-      const names = tables.map((row) => String(Object.values(row)[0]));
-      const isEmpty = names.length === 0;
-      const normalizedNames = names.map((name) => name.toLowerCase());
-      const isCrediCuenta = normalizedNames.includes('_prisma_migrations') && normalizedNames.includes('tienda');
-      if (!isEmpty && !isCrediCuenta) {
-        throw new Error('La base `test` contiene tablas ajenas y no se modificará.');
-      }
-    } finally {
-      await fallback.end();
-    }
   }
 } finally {
   await connection.end();
+}
+
+const testConnection = await mariadb.createConnection({ ...connectionOptions, database: testDatabase });
+try {
+  const tables = await testConnection.query('SHOW TABLES');
+  const names = tables.map((row) => String(Object.values(row)[0]).toLowerCase());
+  const isEmpty = names.length === 0;
+  const isExactCrediCuenta = names.length === expectedTables.size
+    && names.every((name) => expectedTables.has(name));
+  if (!isEmpty && !isExactCrediCuenta) {
+    throw new Error(`La base \`${testDatabase}\` contiene tablas ajenas y no se modificará.`);
+  }
+  if (isExactCrediCuenta) {
+    await testConnection.query('SET FOREIGN_KEY_CHECKS = 0');
+    try {
+      for (const table of names.filter((name) => name !== '_prisma_migrations')) {
+        await testConnection.query(`TRUNCATE TABLE \`${table}\``);
+      }
+    } finally {
+      await testConnection.query('SET FOREIGN_KEY_CHECKS = 1');
+    }
+  }
+} finally {
+  await testConnection.end();
 }
 
 sourceUrl.pathname = `/${testDatabase}`;

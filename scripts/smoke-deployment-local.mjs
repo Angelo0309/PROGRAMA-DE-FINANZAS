@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 
 import dotenv from 'dotenv';
 import mariadb from 'mariadb';
@@ -80,5 +81,11 @@ try {
   await waitForReady();
   console.log('Smoke de despliegue: live=ok, ready=ok');
 } finally {
-  api.kill();
+  if (api.exitCode === null) {
+    api.kill();
+    await Promise.race([
+      once(api, 'exit'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('La API temporal no se cerró en 5 segundos.')), 5_000)),
+    ]);
+  }
 }

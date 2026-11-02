@@ -34,3 +34,5 @@ usuario no puede crear bases, usa la base estándar `test` únicamente cuando
 está vacía o ya corresponde a CrediCuenta. Luego aplica migraciones, carga exclusivamente datos ficticios y
 prueba login, activación, compra, corte, pago, portal del cliente, idempotencia,
 concurrencia y rechazo de acceso a otra tienda. No modifica `credicuentadb`.
+Antes de cada ejecución limpia únicamente las tablas reconocidas de esa base
+aislada, por lo que las pruebas no acumulan clientes, compras ni pagos.
