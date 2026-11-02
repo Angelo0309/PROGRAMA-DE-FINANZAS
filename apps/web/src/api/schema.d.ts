@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/stores/{storeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deactivateStore"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/invitations": {
         parameters: {
             query?: never;
@@ -100,6 +116,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stores/{storeId}/clients/{clientId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deactivateClient"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stores/{storeId}/products": {
         parameters: {
             query?: never;
@@ -111,6 +143,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/stores/{storeId}/products/{productId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deactivateProduct"];
         options?: never;
         head?: never;
         patch?: never;
@@ -132,6 +180,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stores/{storeId}/accounts/{accountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deactivateAccount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stores/{storeId}/purchases": {
         parameters: {
             query?: never;
@@ -142,6 +206,86 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["createPurchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountId}/payment-quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPaymentQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountId}/cuts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createCut"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountId}/statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getStatements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountId}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/payments/{paymentId}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPaymentReceipt"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -232,10 +376,75 @@ export interface components {
             platformRole: "PLATFORM_ADMIN" | "USER";
             storeAccesses: components["schemas"]["StoreAccess"][];
         };
+        PaymentInput: {
+            /** Format: uuid */
+            storeId: string;
+            /** Format: date-time */
+            paidAt: string;
+            currency: string;
+            amount: components["schemas"]["DecimalString"];
+        };
+        CutInput: {
+            /** Format: uuid */
+            storeId: string;
+            /** Format: date-time */
+            cutAt: string;
+        };
+        Statement: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            cutAt: string;
+            /** Format: date */
+            periodStart: string;
+            /** Format: date */
+            periodEnd: string;
+            /** Format: date */
+            dueDate: string;
+            currency: string;
+            totalDue: components["schemas"]["DecimalString"];
+        };
+        PaymentQuote: {
+            /** Format: uuid */
+            accountId: string;
+            /** Format: date */
+            paidOn: string;
+            currency: string;
+            amount: components["schemas"]["DecimalString"];
+            obligations: {
+                /** Format: uuid */
+                id: string;
+                /** Format: date */
+                dueDate: string;
+                lateDays: number;
+                lateInterest: components["schemas"]["DecimalString"];
+                compensatoryInterest: components["schemas"]["DecimalString"];
+                principal: components["schemas"]["DecimalString"];
+            }[];
+        };
+        PaymentReceipt: {
+            /** Format: uuid */
+            id: string;
+            receiptNumber: string;
+            /** Format: date-time */
+            paidAt: string;
+            currency: string;
+            amount: components["schemas"]["DecimalString"];
+            allocations: {
+                /** Format: uuid */
+                obligationId: string;
+                lateInterestPaid: components["schemas"]["DecimalString"];
+                compensatoryPaid: components["schemas"]["DecimalString"];
+                principalPaid: components["schemas"]["DecimalString"];
+            }[];
+        };
     };
     responses: never;
     parameters: {
         storeId: string;
+        clientId: string;
+        productId: string;
+        accountId: string;
     };
     requestBodies: never;
     headers: never;
@@ -332,6 +541,33 @@ export interface operations {
             };
         };
     };
+    deactivateStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["storeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tienda desactivada logicamente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tienda activa no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     createInvitation: {
         parameters: {
             query?: never;
@@ -388,6 +624,34 @@ export interface operations {
             };
         };
     };
+    deactivateClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["storeId"];
+                clientId: components["parameters"]["clientId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cliente y cuentas activas desactivados logicamente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cliente activo no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listProducts: {
         parameters: {
             query?: never;
@@ -401,6 +665,34 @@ export interface operations {
         responses: {
             /** @description Productos */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deactivateProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["storeId"];
+                productId: components["parameters"]["productId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Producto o servicio desactivado logicamente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Producto o servicio activo no encontrado */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -428,6 +720,34 @@ export interface operations {
             };
         };
     };
+    deactivateAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["storeId"];
+                accountId: components["parameters"]["accountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cuenta de credito desactivada logicamente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cuenta activa no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     createPurchase: {
         parameters: {
             query?: never;
@@ -447,6 +767,138 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getPaymentQuote: {
+        parameters: {
+            query: {
+                storeId: string;
+                paidAt: string;
+            };
+            header?: never;
+            path: {
+                accountId: components["parameters"]["accountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Importe completo exigible calculado para la fecha de pago */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentQuote"];
+                };
+            };
+        };
+    };
+    createCut: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                accountId: components["parameters"]["accountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CutInput"];
+            };
+        };
+        responses: {
+            /** @description Corte manual emitido */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getStatements: {
+        parameters: {
+            query: {
+                storeId: string;
+            };
+            header?: never;
+            path: {
+                accountId: components["parameters"]["accountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Estados de cuenta emitidos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Statement"][];
+                };
+            };
+        };
+    };
+    createPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                accountId: components["parameters"]["accountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentInput"];
+            };
+        };
+        responses: {
+            /** @description Pago completo registrado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Importe parcial */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPaymentReceipt: {
+        parameters: {
+            query: {
+                storeId: string;
+            };
+            header?: never;
+            path: {
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Comprobante con aplicación a mora, interés y capital */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReceipt"];
+                };
             };
         };
     };

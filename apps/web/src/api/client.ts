@@ -88,6 +88,16 @@ export interface PaymentReceiptView {
   }>;
 }
 
+export interface StatementView {
+  id: string;
+  cutAt: string;
+  periodStart: string;
+  periodEnd: string;
+  dueDate: string;
+  currency: string;
+  totalDue: string;
+}
+
 export interface ClientView {
   id: string;
   documentType: string;
@@ -183,6 +193,7 @@ export interface ApiClient {
     idempotencyKey?: string;
   }): Promise<{ id: string; receiptNumber: string; currency: string; amount: string }>;
   getReceipt(paymentId: string, storeId: string): Promise<PaymentReceiptView>;
+  getStatements(accountId: string, storeId: string): Promise<StatementView[]>;
   createPurchase(
     storeId: string,
     input: {
@@ -334,6 +345,12 @@ class HttpApiClient implements ApiClient {
   getReceipt(paymentId: string, storeId: string) {
     return this.request<PaymentReceiptView>(
       `/payments/${paymentId}/receipt?storeId=${encodeURIComponent(storeId)}`,
+    );
+  }
+
+  getStatements(accountId: string, storeId: string) {
+    return this.request<StatementView[]>(
+      `/accounts/${accountId}/statements?storeId=${encodeURIComponent(storeId)}`,
     );
   }
 

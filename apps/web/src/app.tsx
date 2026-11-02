@@ -23,6 +23,7 @@ import {
   type ProductView,
   type Profile,
   type ScheduleItemView,
+  type StatementView,
   type StoreAccess,
 } from './api/client';
 import './styles.css';
@@ -67,6 +68,8 @@ const accountFormSchema = z.object({
 
 const money = (currency: string, amount: string) =>
   `${currency === 'PEN' ? 'S/' : currency} ${Number(amount).toFixed(2)}`;
+const officialMoney = (currency: string, amount: string) =>
+  `${currency === 'PEN' ? 'S/' : currency} ${amount}`;
 
 const commercialDate = (date: string) => {
   const [year, month, day] = date.slice(0, 10).split('-');
@@ -83,6 +86,9 @@ export function localDateInTimeZone(date: Date, timeZone: string) {
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
   return `${value('year')}-${value('month')}-${value('day')}`;
 }
+
+const commercialInstantInLima = (instant: string) =>
+  commercialDate(localDateInTimeZone(new Date(instant), 'America/Lima'));
 
 const rateAsPercentage = (rate: string) => `${(Number(rate) * 100).toFixed(2)} %`;
 const rateKindLabel = (kind: CreditConditionView['compensatoryRateKind']) => kind === 'NOMINAL_ANNUAL' ? 'Nominal anual' : 'Efectiva anual';
@@ -1422,6 +1428,75 @@ function PaymentRegistration({
   );
 }
 
+function CutReports({ api, access, accounts }: { api: ApiClient; access: StoreAccess; accounts: AccountView[] }) {
+  const [accountId, setAccountId] = useState('');
+  const [statements, setStatements] = useState<StatementView[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const statementsRequest = useRef(0);
+  const selectedAccount = accounts.find((account) => account.id === accountId);
+  const latest = statements[0];
+
+  async function loadStatements(selectedId: string, clearExisting: boolean) {
+    const requestId = ++statementsRequest.current;
+    if (clearExisting) setStatements([]);
+    setError('');
+    if (!selectedId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const nextStatements = await api.getStatements(selectedId, access.storeId);
+      if (statementsRequest.current === requestId) setStatements(nextStatements);
+    } catch (reason) {
+      if (statementsRequest.current === requestId) {
+        setError(reason instanceof Error ? reason.message : 'No fue posible consultar los estados de cuenta.');
+      }
+    } finally {
+      if (statementsRequest.current === requestId) setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadStatements(accountId, true);
+  }, [access.storeId, accountId, api]);
+
+  return (
+    <section className="cut-report-page">
+      <div className="page-lead">
+        <p>Consulta los cortes emitidos por el proceso automático y sus importes oficiales.</p>
+        <button className="secondary-button compact-button" type="button" disabled={!accountId || loading} onClick={() => void loadStatements(accountId, false)}>{loading ? 'Actualizando…' : 'Actualizar estados'}</button>
+      </div>
+      <section className="schedule-selector">
+        <label htmlFor="statement-account">Cuenta del cliente</label>
+        <select id="statement-account" value={accountId} onChange={(event) => setAccountId(event.target.value)}>
+          <option value="">Seleccione una cuenta</option>
+          {accounts.map((account) => <option key={account.id} value={account.id}>{account.customerName} · {account.accountNumber}</option>)}
+        </select>
+      </section>
+
+      {selectedAccount && (
+        <section className="metric-strip statement-metrics" aria-label="Resumen de estados de cuenta">
+          <article><span>Cuenta</span><strong className="store-name">{selectedAccount.accountNumber}</strong></article>
+          <article><span>Estados emitidos</span><strong>{statements.length}</strong></article>
+          <article><span>Último importe exigible</span><strong>{latest ? officialMoney(latest.currency, latest.totalDue) : 'Sin corte'}</strong></article>
+          <article><span>Último vencimiento</span><strong className="store-name">{latest ? commercialDate(latest.dueDate) : 'Sin corte'}</strong></article>
+        </section>
+      )}
+
+      {error && <Alert severity="error">{error}</Alert>}
+      <section className="catalog-panel statement-panel" aria-labelledby="statement-title">
+        <div className="catalog-panel-heading"><div><p className="folio">HISTORIAL DE CORTES</p><h2 id="statement-title">Estados de cuenta emitidos</h2></div><span>{loading ? 'Consultando…' : `${statements.length} estados`}</span></div>
+        {!accountId ? <p className="empty-state statement-empty">Seleccione una cuenta para consultar sus cortes.</p> : loading ? <div className="schedule-loading"><CircularProgress size={24} /><span>Consultando estados de cuenta…</span></div> : statements.length === 0 ? <p className="empty-state statement-empty">Todavía no se han emitido estados para esta cuenta.</p> : (
+          <div className="table-wrapper"><table className="statement-table" aria-label="Estados de cuenta emitidos"><thead><tr><th>Corte</th><th>Periodo</th><th>Vencimiento</th><th>Importe exigible</th><th>Estado</th></tr></thead><tbody>{statements.map((statement) => <tr key={statement.id}><td>{commercialInstantInLima(statement.cutAt)}</td><td>{commercialDate(statement.periodStart)} – {commercialDate(statement.periodEnd)}</td><td>{commercialDate(statement.dueDate)}</td><td className="money-cell">{officialMoney(statement.currency, statement.totalDue)}</td><td><span className="status-pill ready">Emitido</span></td></tr>)}</tbody></table></div>
+        )}
+      </section>
+      <p className="audit-note">Los cortes vencidos se procesan automáticamente cada minuto. El reporte no recalcula importes en el navegador.</p>
+    </section>
+  );
+}
+
 function BusinessWorkspace({
   api,
   profile,
@@ -1522,6 +1597,10 @@ function BusinessWorkspace({
     return <PaymentRegistration api={api} access={access} accounts={accounts} onPaymentSaved={refreshAccounts} />;
   }
 
+  if (activeSection === 'Reporte de corte') {
+    return <CutReports api={api} access={access} accounts={accounts} />;
+  }
+
   return (
     <>
       <section className="metric-strip">
@@ -1556,7 +1635,7 @@ function BusinessArea({
   onLogout: () => void;
 }) {
   const [activeSection, setActiveSection] = useState('Panel del negocio');
-  const availableNavigation = ['Panel del negocio', 'Productos y servicios', 'Clientes', 'Registrar compra', 'Cuentas corrientes', 'Planes de pago', 'Registrar pago'];
+  const availableNavigation = ['Panel del negocio', 'Productos y servicios', 'Clientes', 'Registrar compra', 'Cuentas corrientes', 'Planes de pago', 'Registrar pago', 'Reporte de corte'];
   const title = activeSection === 'Productos y servicios'
     ? 'Productos y servicios'
     : activeSection === 'Clientes'
@@ -1569,6 +1648,8 @@ function BusinessArea({
             ? 'Planes de pago'
             : activeSection === 'Registrar pago'
               ? 'Registrar pago'
+              : activeSection === 'Reporte de corte'
+                ? 'Reporte de corte'
             : 'Mesa de crédito';
 
   return (

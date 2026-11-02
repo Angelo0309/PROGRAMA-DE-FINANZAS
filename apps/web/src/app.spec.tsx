@@ -118,6 +118,10 @@ function makeApi(profile: unknown) {
         { obligationId: 'obligation-4', lateInterestPaid: '2.00', compensatoryPaid: '3.00', principalPaid: '45.00' },
       ],
     }),
+    getStatements: vi.fn().mockResolvedValue([
+      { id: 'cut-1', cutAt: '2026-10-21T04:59:59.000Z', periodStart: '2026-09-21', periodEnd: '2026-10-20', dueDate: '2026-10-28', currency: 'PEN', totalDue: '255.80' },
+      { id: 'cut-large', cutAt: '2026-09-21T04:59:59.000Z', periodStart: '2026-08-21', periodEnd: '2026-09-20', dueDate: '2026-09-28', currency: 'PEN', totalDue: '9007199254740993.01' },
+    ]),
     createPurchase: vi.fn().mockResolvedValue({ id: 'purchase-1', total: '100.00' }),
     getMyAccounts: vi.fn().mockResolvedValue([{ id: 'account-1', storeName: 'Bodega Demo', accountNumber: 'CC-001', originalOutstanding: '100.00', creditLimit: '1000.00', currency: 'PEN' }]),
     getMyStatements: vi.fn().mockResolvedValue([]),
@@ -415,6 +419,50 @@ describe('App por roles', () => {
     expect(screen.getByText('obligation-3')).toBeVisible();
     expect(screen.getByText('obligation-4')).toBeVisible();
     expect(api.listAccounts).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows issued cut reports and refreshes them from the API', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    render(<App api={api as never} />);
+    await login();
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Reporte de corte' }));
+
+    expect(await screen.findByRole('heading', { name: 'Reporte de corte', level: 1 })).toBeVisible();
+    fireEvent.change(screen.getByLabelText(/cuenta del cliente/i), { target: { value: 'account-1' } });
+    await waitFor(() => expect(api.getStatements).toHaveBeenCalledWith('account-1', 'store-1'));
+    const report = await screen.findByRole('table', { name: /estados de cuenta emitidos/i });
+    expect(within(report).getAllByRole('cell')[0]).toHaveTextContent('20/10/2026');
+    expect(within(report).getByText('21/09/2026 – 20/10/2026')).toBeVisible();
+    expect(within(report).getByText('S/ 255.80')).toBeVisible();
+    expect(within(report).getByText('S/ 9007199254740993.01')).toBeVisible();
+
+    api.getStatements.mockRejectedValueOnce(new Error('No se pudo actualizar.'));
+    fireEvent.click(screen.getByRole('button', { name: /actualizar estados/i }));
+    await waitFor(() => expect(api.getStatements).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('No se pudo actualizar.')).toBeVisible();
+    expect(within(screen.getByRole('table', { name: /estados de cuenta emitidos/i })).getByText('S/ 255.80')).toBeVisible();
+  });
+
+  it('ignores a late cut report response after switching accounts', async () => {
+    let finishFirst: ((value: unknown[]) => void) | undefined;
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    const accounts = await api.listAccounts();
+    api.listAccounts.mockResolvedValue([...accounts, { ...accounts[0], id: 'account-2', accountNumber: 'CC-002', customerName: 'Ana Torres' }]);
+    api.getStatements.mockImplementation((accountId: string) => accountId === 'account-1'
+      ? new Promise((resolve) => { finishFirst = resolve; })
+      : Promise.resolve([{ id: 'cut-2', cutAt: '2026-11-01T04:59:59.000Z', periodStart: '2026-10-01', periodEnd: '2026-10-31', dueDate: '2026-11-08', currency: 'PEN', totalDue: '44.00' }]));
+    render(<App api={api as never} />);
+    await login();
+    fireEvent.click(within(await screen.findByRole('navigation', { name: /secciones/i })).getByRole('button', { name: 'Reporte de corte' }));
+    const selector = screen.getByLabelText(/cuenta del cliente/i);
+    fireEvent.change(selector, { target: { value: 'account-1' } });
+    await waitFor(() => expect(api.getStatements).toHaveBeenCalledWith('account-1', 'store-1'));
+    fireEvent.change(selector, { target: { value: 'account-2' } });
+    expect(await screen.findAllByText('S/ 44.00')).toHaveLength(2);
+    finishFirst?.([{ id: 'old-cut', cutAt: '2026-10-01T04:59:59.000Z', periodStart: '2026-09-01', periodEnd: '2026-09-30', dueDate: '2026-10-08', currency: 'PEN', totalDue: '99.00' }]);
+    await waitFor(() => expect(screen.queryByText('S/ 99.00')).not.toBeInTheDocument());
+    expect(screen.getAllByText('S/ 44.00')).toHaveLength(2);
   });
 
   it('does not submit a purchase command twice while the first request is pending', async () => {

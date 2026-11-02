@@ -165,6 +165,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaymentQuote"
+  /accounts/{accountId}/cuts:
+    post:
+      operationId: createCut
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/accountId"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 100 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CutInput"
+      responses:
+        "201": { description: Corte manual emitido }
+  /accounts/{accountId}/statements:
+    get:
+      operationId: getStatements
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/accountId"
+        - name: storeId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Estados de cuenta emitidos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Statement" }
   /accounts/{accountId}/payments:
     post:
       operationId: createPayment
@@ -300,6 +336,23 @@ components:
         paidAt: { type: string, format: date-time }
         currency: { type: string, minLength: 3, maxLength: 3 }
         amount: { $ref: "#/components/schemas/DecimalString" }
+    CutInput:
+      type: object
+      required: [storeId, cutAt]
+      properties:
+        storeId: { type: string, format: uuid }
+        cutAt: { type: string, format: date-time }
+    Statement:
+      type: object
+      required: [id, cutAt, periodStart, periodEnd, dueDate, currency, totalDue]
+      properties:
+        id: { type: string, format: uuid }
+        cutAt: { type: string, format: date-time }
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        totalDue: { $ref: "#/components/schemas/DecimalString" }
     PaymentQuote:
       type: object
       required: [accountId, paidOn, currency, amount, obligations]

@@ -15,4 +15,5 @@
 - Gestion web de cuentas corrientes con limites, saldos y condiciones crediticias vigentes.
 - Consulta web del cronograma oficial de cuotas, vencimientos, intereses y estados.
 - Registro web de pagos completos con cotización oficial, idempotencia y comprobante detallado.
+- Reporte web de cortes y estados de cuenta emitidos por cuenta, con actualización manual de la consulta.
 - Prisma, migracion, semillas ficticias, Docker, CI y guias de despliegue.
