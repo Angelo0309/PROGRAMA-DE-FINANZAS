@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: credicuenta-api
+    name: credicuenta-api-angelo0309
     plan: free
     runtime: docker
     dockerfilePath: ./apps/api/Dockerfile
@@ -15,7 +15,7 @@ services:
       - key: PORT
         value: 3000
   - type: web
-    name: credicuenta-web
+    name: credicuenta-web-angelo0309
     plan: free
     runtime: docker
     dockerfilePath: ./apps/web/Dockerfile
