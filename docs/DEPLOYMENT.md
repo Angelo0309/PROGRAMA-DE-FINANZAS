@@ -11,6 +11,22 @@
 
 La API ejecuta `prisma migrate deploy` antes de iniciar. Los datos de Docker
 son de demostracion y las claves del archivo compose no deben reutilizarse.
+Si el puerto 3306 ya está ocupado, use por ejemplo
+`$env:CREDICUENTA_DB_PORT=3308` antes de iniciar Docker.
+
+Antes de entregar, valide sin Docker con:
+
+```powershell
+npm install
+npm run test:integration:local
+npm run lint
+npm run typecheck
+npm run build
+npm run test:deployment:local
+```
+
+El último comando inicia temporalmente la compilación de producción en el
+puerto 3100 y comprueba `/health/live` y `/health/ready`; luego la cierra.
 
 ## Render + Aiven
 
@@ -19,9 +35,14 @@ son de demostracion y las claves del archivo compose no deben reutilizarse.
 - En Render cree un Web Service con el Dockerfile `apps/api/Dockerfile`.
   Configure `DATABASE_URL`, `JWT_ACCESS_SECRET`, `WEB_ORIGIN` y `PORT=3000`.
 - Configure el health check de Render en `/api/v1/health/ready`.
-- Cree un Static Site o Web Service con `apps/web/Dockerfile` y pase
+- Cree el frontend como Web Service con runtime Docker y el archivo
+  `apps/web/Dockerfile`. Configure
   `VITE_API_URL=https://SU_API.onrender.com/api/v1` como argumento de build.
 - Después del primer despliegue ejecute la semilla solo para la demo.
+
+La API ejecuta `prisma migrate deploy` automáticamente al iniciar. La semilla
+no se ejecuta automáticamente para evitar sobrescribir o recrear usuarios de
+demostración en cada reinicio.
 
 Los planes gratuitos pueden suspenderse. Antes de exponer, abra primero
 `/api/v1/health/ready`, inicie sesion y compruebe compra, corte y pago.

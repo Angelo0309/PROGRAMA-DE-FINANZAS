@@ -19,8 +19,10 @@ semillas ficticias, pruebas y configuracion de despliegue academico.
 ```powershell
 npm install
 npm run test
+npm run test:integration:local
 npm run typecheck
 npm run build
+npm run test:deployment:local
 ```
 
 Copie `.env.example` como `apps/api/.env` y reemplace los secretos antes de

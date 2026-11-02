@@ -34,6 +34,16 @@ e2e('CrediCuenta HTTP workflow', () => {
         password: 'DemoSegura#2026',
       })
       .expect(201);
+    const otherStore = await request(app.getHttpServer())
+      .post('/api/v1/platform/stores')
+      .set('Authorization', `Bearer ${platformLogin.body.accessToken as string}`)
+      .send({
+        taxId: `E2E${suffix.replaceAll('-', '').slice(0, 12)}`,
+        name: `Tienda aislada ${suffix.slice(0, 8)}`,
+        currency: 'PEN',
+        timeZone: 'America/Lima',
+      })
+      .expect(201);
 
     const invitation = await request(app.getHttpServer())
       .post('/api/v1/platform/invitations')
@@ -163,5 +173,47 @@ e2e('CrediCuenta HTTP workflow', () => {
           expect.arrayContaining([expect.objectContaining({ id: account.body.id })]),
         );
       });
+
+    await request(app.getHttpServer())
+      .get('/api/v1/me/purchases')
+      .set('Authorization', `Bearer ${activation.body.accessToken as string}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual(expect.arrayContaining([
+          expect.objectContaining({ id: purchase.body.id, total: purchase.body.total }),
+        ]));
+      });
+    await request(app.getHttpServer())
+      .get('/api/v1/me/statements')
+      .set('Authorization', `Bearer ${activation.body.accessToken as string}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual(expect.arrayContaining([
+          expect.objectContaining({ id: cut.body.id }),
+        ]));
+      });
+    await request(app.getHttpServer())
+      .get('/api/v1/me/schedule')
+      .set('Authorization', `Bearer ${activation.body.accessToken as string}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual(expect.arrayContaining([
+          expect.objectContaining({ id: obligation.id, status: 'PAID' }),
+        ]));
+      });
+    await request(app.getHttpServer())
+      .get('/api/v1/me/payments')
+      .set('Authorization', `Bearer ${activation.body.accessToken as string}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual(expect.arrayContaining([
+          expect.objectContaining({ id: payment.body.id, receiptNumber: payment.body.receiptNumber }),
+        ]));
+      });
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/stores/${otherStore.body.id as string}/clients`)
+      .set('Authorization', authorization)
+      .expect(403);
   }, 20_000);
 });

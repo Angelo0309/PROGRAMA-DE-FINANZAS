@@ -17,3 +17,5 @@
 - Registro web de pagos completos con cotización oficial, idempotencia y comprobante detallado.
 - Reporte web de cortes y estados de cuenta emitidos por cuenta, con actualización manual de la consulta.
 - Prisma, migracion, semillas ficticias, Docker, CI y guias de despliegue.
+- Prueba integral local repetible en base aislada, con portal del cliente y rechazo de acceso cruzado entre tiendas.
+- Smoke de producción automatizado para compilación y endpoints de salud, más health checks de Docker Compose.

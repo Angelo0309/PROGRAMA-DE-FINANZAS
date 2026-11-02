@@ -125,8 +125,33 @@ integration('MariaDB integration', () => {
     const repository = new PrismaCreditOperationsRepository(prisma);
     const operations = new CreditOperationsService(repository, randomUUID);
     const store = await prisma.store.findUniqueOrThrow({ where: { taxId: '20123456789' } });
-    const account = await prisma.creditAccount.findUniqueOrThrow({
+    const templateAccount = await prisma.creditAccount.findUniqueOrThrow({
       where: { storeId_accountNumber: { storeId: store.id, accountNumber: 'CC-000001' } },
+      include: { conditions: { orderBy: { version: 'desc' }, take: 1 } },
+    });
+    const templateCondition = templateAccount.conditions[0]!;
+    const account = await prisma.creditAccount.create({
+      data: {
+        storeId: store.id,
+        customerId: templateAccount.customerId,
+        accountNumber: `INT-${randomUUID()}`,
+        currency: templateAccount.currency,
+        creditLimit: templateAccount.creditLimit,
+        conditions: {
+          create: {
+            version: 1,
+            compensatoryRateKind: templateCondition.compensatoryRateKind,
+            compensatoryRate: templateCondition.compensatoryRate,
+            lateRateKind: templateCondition.lateRateKind,
+            lateRate: templateCondition.lateRate,
+            billingDay: templateCondition.billingDay,
+            dueDay: templateCondition.dueDay,
+            maxInstallments: templateCondition.maxInstallments,
+            graceMonths: templateCondition.graceMonths,
+            validFrom: templateCondition.validFrom,
+          },
+        },
+      },
     });
     const product = await prisma.productService.findUniqueOrThrow({
       where: { storeId_sku: { storeId: store.id, sku: 'PROD-001' } },
