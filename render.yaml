@@ -1,6 +1,7 @@
 services:
   - type: web
     name: credicuenta-api
+    plan: free
     runtime: docker
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /api/v1/health/ready
@@ -15,6 +16,7 @@ services:
         value: 3000
   - type: web
     name: credicuenta-web
+    plan: free
     runtime: docker
     dockerfilePath: ./apps/web/Dockerfile
     envVars:
