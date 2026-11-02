@@ -258,6 +258,18 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         "200": { description: Compras del cliente }
+  /me/schedule:
+    get:
+      operationId: getMySchedule
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Cronograma de obligaciones del cliente }
+  /me/payments:
+    get:
+      operationId: getMyPayments
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Historial de pagos y comprobantes del cliente }
 components:
   securitySchemes:
     bearerAuth:

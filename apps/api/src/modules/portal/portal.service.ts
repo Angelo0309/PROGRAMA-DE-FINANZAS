@@ -113,6 +113,13 @@ export class PortalService {
     },
     actorId: string,
   ) {
+    if (input.storeId) {
+      const activeStore = await this.prisma.store.findFirst({
+        where: { id: input.storeId, active: true },
+        select: { id: true },
+      });
+      if (!activeStore) throw new NotFoundException('La tienda no está activa.');
+    }
     const token = randomBytes(32).toString('base64url');
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const invitation = await this.prisma.$transaction(async (transaction) => {
@@ -222,6 +229,52 @@ export class PortalService {
         unitPrice: detail.unitPrice.toFixed(4),
         lineTotal: detail.lineTotal.toFixed(2),
         imageUrl: detail.product.imageUrl,
+      })),
+    }));
+  }
+
+  async getMySchedule(userId: string) {
+    const obligations = await this.prisma.obligation.findMany({
+      where: { credit: { account: { customer: { userId } } } },
+      include: { credit: { select: { accountId: true, purchaseId: true, currency: true } } },
+      orderBy: [{ dueDate: 'asc' }, { installmentNumber: 'asc' }],
+    });
+    return obligations.map((obligation) => ({
+      id: obligation.id,
+      accountId: obligation.credit.accountId,
+      purchaseId: obligation.credit.purchaseId,
+      installmentNumber: obligation.installmentNumber,
+      dueDate: obligation.dueDate.toISOString().slice(0, 10),
+      currency: obligation.credit.currency,
+      openingBalance: obligation.openingBalance.toFixed(2),
+      principalDue: obligation.principalDue.toFixed(2),
+      compensatoryInterest: obligation.compensatoryInterest.toFixed(2),
+      lateInterest: obligation.lateInterest.toFixed(2),
+      amountDue: obligation.amountDue.toFixed(2),
+      paidAmount: obligation.paidAmount.toFixed(2),
+      status: obligation.status,
+    }));
+  }
+
+  async getMyPayments(userId: string) {
+    const payments = await this.prisma.payment.findMany({
+      where: { account: { customer: { userId } } },
+      include: { details: { orderBy: { id: 'asc' } } },
+      orderBy: { paidAt: 'desc' },
+    });
+    return payments.map((payment) => ({
+      id: payment.id,
+      accountId: payment.accountId,
+      paidAt: payment.paidAt.toISOString(),
+      currency: payment.currency,
+      amount: payment.amount.toFixed(2),
+      method: payment.method,
+      receiptNumber: payment.receiptNumber,
+      allocations: payment.details.map((detail) => ({
+        obligationId: detail.obligationId,
+        lateInterestPaid: detail.lateInterestPaid.toFixed(2),
+        compensatoryPaid: detail.compensatoryPaid.toFixed(2),
+        principalPaid: detail.principalPaid.toFixed(2),
       })),
     }));
   }

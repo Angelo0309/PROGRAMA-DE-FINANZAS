@@ -138,4 +138,14 @@ export class MeController {
   getPurchases(@Req() request: AuthenticatedRequest) {
     return this.service.getMyPurchases(request.user.sub);
   }
+
+  @Get('schedule')
+  getSchedule(@Req() request: AuthenticatedRequest) {
+    return this.service.getMySchedule(request.user.sub);
+  }
+
+  @Get('payments')
+  getPayments(@Req() request: AuthenticatedRequest) {
+    return this.service.getMyPayments(request.user.sub);
+  }
 }

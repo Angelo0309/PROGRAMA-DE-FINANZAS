@@ -17,6 +17,7 @@ import {
   type AccountView,
   type ApiClient,
   type ClientView,
+  type ClientPaymentView,
   type CreditConditionView,
   type PaymentQuoteView,
   type PaymentReceiptView,
@@ -285,7 +286,7 @@ function WorkspaceShell({
   );
 }
 
-function PlatformWorkspace({ api, profile }: { api: ApiClient; profile: Profile }) {
+function PlatformWorkspace({ api, profile, activeSection }: { api: ApiClient; profile: Profile; activeSection: string }) {
   const [stores, setStores] = useState<Array<{ id: string; name: string; active: boolean }>>([]);
   const [events, setEvents] = useState<Array<{ id: string; event: string; createdAt: string }>>([]);
   const [showStoreForm, setShowStoreForm] = useState(false);
@@ -348,6 +349,19 @@ function PlatformWorkspace({ api, profile }: { api: ApiClient; profile: Profile 
     }
   }
 
+  async function deactivateStore(storeId: string) {
+    try {
+      await api.deactivateStore(storeId);
+      setStores((current) => current.map((store) => store.id === storeId ? { ...store, active: false } : store));
+      setError('');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'No fue posible desactivar la tienda.');
+    }
+  }
+
+  const showStores = activeSection === 'Dashboard' || activeSection === 'Gestión de tiendas';
+  const showUsers = activeSection === 'Dashboard' || activeSection === 'Gestión de usuarios';
+
   return (
     <>
       <section className="metric-strip" aria-label="Indicadores de plataforma">
@@ -355,7 +369,7 @@ function PlatformWorkspace({ api, profile }: { api: ApiClient; profile: Profile 
         <article><span>Eventos visibles</span><strong>{events.length}</strong></article>
         <article><span>Estado</span><strong className="status-word">Operativa</strong></article>
       </section>
-      <section className="paper-section" id="actividad">
+      {showStores && <section className="paper-section" id="actividad">
         <div className="section-title">
           <div><p className="folio">PLATAFORMA · TIENDAS</p><h2>Directorio comercial</h2></div>
           <button className="secondary-button" type="button" onClick={() => setShowStoreForm((value) => !value)}>Nueva tienda</button>
@@ -372,29 +386,37 @@ function PlatformWorkspace({ api, profile }: { api: ApiClient; profile: Profile 
         {stores.length === 0 ? (
           <p className="empty-state">Aún no hay tiendas para mostrar.</p>
         ) : (
-          <table><thead><tr><th>Tienda</th><th>Estado</th></tr></thead><tbody>
-            {stores.map((store) => <tr key={store.id}><td>{store.name}</td><td>{store.active ? 'Activa' : 'Inactiva'}</td></tr>)}
+          <table><thead><tr><th>Tienda</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
+            {stores.map((store) => <tr key={store.id}><td>{store.name}</td><td>{store.active ? 'Activa' : 'Inactiva'}</td><td>{store.active ? <button className="table-action" type="button" aria-label={`Desactivar ${store.name}`} onClick={() => void deactivateStore(store.id)}>Desactivar</button> : '—'}</td></tr>)}
           </tbody></table>
         )}
-      </section>
-      <section className="paper-section invitation-section">
+      </section>}
+      {showStores && error && <Alert severity="error">{error}</Alert>}
+      {showUsers && <section className="paper-section invitation-section">
         <div><p className="folio">ACCESOS · INVITACIÓN</p><h2>Administrador del negocio</h2></div>
         <form className="inline-form" onSubmit={inviteAdministrator}>
           <label htmlFor="invite-store">Tienda asignada</label>
           <select id="invite-store" value={inviteStoreId} onChange={(event) => setInviteStoreId(event.target.value)}>
             <option value="">Seleccione una tienda</option>
-            {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
+            {stores.filter((store) => store.active).map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
           </select>
           <label htmlFor="invite-email">Correo del administrador</label>
           <input id="invite-email" type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} />
           <button className="primary-button" type="submit">Crear invitación</button>
         </form>
         {oneTimeToken && <Alert severity="success">Token de un solo uso: {oneTimeToken}</Alert>}
-        {error && <Alert severity="error">{error}</Alert>}
-      </section>
+        {!showStores && error && <Alert severity="error">{error}</Alert>}
+      </section>}
+      {activeSection === 'Auditoría' && <section className="paper-section"><p className="folio">TRAZABILIDAD</p><h2>Eventos de auditoría</h2>{events.length === 0 ? <p className="empty-state">No hay eventos registrados.</p> : <div className="table-wrapper"><table aria-label="Eventos de auditoría"><thead><tr><th>Evento</th><th>Fecha</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{event.event}</td><td>{commercialInstantInLima(event.createdAt)}</td></tr>)}</tbody></table></div>}</section>}
+      {!['Dashboard', 'Gestión de tiendas', 'Gestión de usuarios', 'Auditoría'].includes(activeSection) && <section className="paper-section"><h2>{activeSection}</h2><p className="empty-state">Esta sección queda reservada para una ampliación posterior; no forma parte del alcance académico actual.</p></section>}
       <p className="audit-note">Sesión de plataforma: {profile.displayName}. Las altas e invitaciones quedan en auditoría.</p>
     </>
   );
+}
+
+function PlatformArea({ api, profile, onLogout }: { api: ApiClient; profile: Profile; onLogout: () => void }) {
+  const [activeSection, setActiveSection] = useState('Dashboard');
+  return <WorkspaceShell profile={profile} title={activeSection === 'Dashboard' ? 'Control de plataforma' : activeSection} kicker="Gobierno y trazabilidad" navigation={platformNavigation} activeNavigation={activeSection} onNavigate={setActiveSection} onLogout={onLogout}><PlatformWorkspace api={api} profile={profile} activeSection={activeSection} /></WorkspaceShell>;
 }
 
 function ProductImage({
@@ -1673,45 +1695,69 @@ function BusinessArea({
   );
 }
 
-function ClientWorkspace({ api }: { api: ApiClient }) {
+function ClientWorkspace({ api, activeSection }: { api: ApiClient; activeSection: string }) {
   const [accounts, setAccounts] = useState<AccountView[]>([]);
   const [statements, setStatements] = useState<Array<{ id: string; dueDate: string; totalDue: string; currency: string }>>([]);
-  const [purchases, setPurchases] = useState<Array<{ id: string; purchasedAt: string; total: string; currency: string }>>([]);
+  const [purchases, setPurchases] = useState<Awaited<ReturnType<ApiClient['getMyPurchases']>>>([]);
+  const [schedule, setSchedule] = useState<ScheduleItemView[]>([]);
+  const [payments, setPayments] = useState<ClientPaymentView[]>([]);
+  const [loadWarning, setLoadWarning] = useState(false);
 
   useEffect(() => {
-    void Promise.all([
+    void Promise.allSettled([
       api.getMyAccounts(),
       api.getMyStatements(),
       api.getMyPurchases(),
-    ]).then(([nextAccounts, nextStatements, nextPurchases]) => {
-      setAccounts(nextAccounts);
-      setStatements(nextStatements);
-      setPurchases(nextPurchases);
+      api.getMySchedule(),
+      api.getMyPayments(),
+    ]).then(([nextAccounts, nextStatements, nextPurchases, nextSchedule, nextPayments]) => {
+      if (nextAccounts.status === 'fulfilled') setAccounts(nextAccounts.value);
+      if (nextStatements.status === 'fulfilled') setStatements(nextStatements.value);
+      if (nextPurchases.status === 'fulfilled') setPurchases(nextPurchases.value);
+      if (nextSchedule.status === 'fulfilled') setSchedule(nextSchedule.value);
+      if (nextPayments.status === 'fulfilled') setPayments(nextPayments.value);
+      setLoadWarning([nextAccounts, nextStatements, nextPurchases, nextSchedule, nextPayments].some((result) => result.status === 'rejected'));
     });
   }, [api]);
 
+  if (activeSection === 'Mis compras') return <section className="paper-section client-ledger"><p className="folio">MIS COMPRAS</p><h2>Consumos registrados</h2>{purchases.length === 0 ? <p className="empty-state">No hay compras recientes.</p> : purchases.map((purchase) => <article className="client-purchase" key={purchase.id}><div><span>{commercialInstantInLima(purchase.purchasedAt)}</span><strong>{officialMoney(purchase.currency, purchase.total)}</strong></div><div className="client-purchase-items">{purchase.items.map((item) => <div key={`${purchase.id}-${item.productId}`}><ProductImage src={item.imageUrl} name={item.description} /><p>{item.description}</p><span>{item.quantity} × {officialMoney(purchase.currency, item.unitPrice)}</span></div>)}</div></article>)}</section>;
+
+  if (activeSection === 'Estado de cuenta') return <section className="paper-section"><p className="folio">ESTADOS DE CUENTA</p><h2>Cortes emitidos</h2>{statements.length === 0 ? <p className="empty-state">No hay estados de cuenta emitidos.</p> : <div className="table-wrapper"><table aria-label="Mis estados de cuenta"><thead><tr><th>Vencimiento</th><th>Importe exigible</th><th>Estado</th></tr></thead><tbody>{statements.map((item) => <tr key={item.id}><td>{commercialDate(item.dueDate)}</td><td className="money-cell">{officialMoney(item.currency, item.totalDue)}</td><td><span className="status-pill ready">Emitido</span></td></tr>)}</tbody></table></div>}</section>;
+
+  if (activeSection === 'Plan de pagos') return <section className="paper-section"><p className="folio">PLAN DE PAGOS</p><h2>Cuotas y vencimientos</h2>{schedule.length === 0 ? <p className="empty-state">No hay cuotas programadas.</p> : <div className="table-wrapper"><table aria-label="Mi plan de pagos"><thead><tr><th>Cuota</th><th>Vencimiento</th><th>Capital</th><th>Interés</th><th>Importe</th><th>Estado</th></tr></thead><tbody>{schedule.map((item) => { const status = obligationStatus(item.status); return <tr key={item.id}><td>{item.installmentNumber}</td><td>{commercialDate(item.dueDate)}</td><td>{officialMoney(item.currency, item.principalDue)}</td><td>{officialMoney(item.currency, item.compensatoryInterest)}</td><td className="money-cell">{officialMoney(item.currency, item.amountDue)}</td><td><span className={`status-pill ${status.tone}`}>{status.label}</span></td></tr>; })}</tbody></table></div>}</section>;
+
+  if (activeSection === 'Historial de pagos') return <section className="paper-section"><p className="folio">HISTORIAL DE PAGOS</p><h2>Comprobantes registrados</h2>{payments.length === 0 ? <p className="empty-state">No hay pagos registrados.</p> : <div className="table-wrapper"><table aria-label="Mi historial de pagos"><thead><tr><th>Comprobante</th><th>Fecha</th><th>Método</th><th>Importe</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id}><td>{payment.receiptNumber}</td><td>{commercialInstantInLima(payment.paidAt)}</td><td>{payment.method.replaceAll('_', ' ')}</td><td className="money-cell">{officialMoney(payment.currency, payment.amount)}</td></tr>)}</tbody></table></div>}</section>;
+
+  if (activeSection === 'Ayuda') return <section className="paper-section"><p className="folio">AYUDA</p><h2>Cómo leer tu CrediCuenta</h2><p className="empty-state">Los importes mostrados provienen del cálculo oficial. Si necesitas corregir una compra o un pago, comunícate con la tienda que administra tu cuenta.</p></section>;
+
   return (
     <>
+      {loadWarning && <Alert severity="warning">Algunos datos no pudieron cargarse. Puedes seguir consultando la información disponible.</Alert>}
       <section className="client-balance-grid">
         {accounts.map((account) => (
           <article className="balance-ticket" key={account.id}>
             <span>{account.storeName}</span>
             <p>Capital pendiente</p>
-            <strong>{money(account.currency, account.originalOutstanding)}</strong>
-            <div><span>Cuenta {account.accountNumber}</span><span>Límite {money(account.currency, account.creditLimit)}</span></div>
+            <strong>{officialMoney(account.currency, account.originalOutstanding)}</strong>
+            <div><span>Cuenta {account.accountNumber}</span><span>Límite {officialMoney(account.currency, account.creditLimit)}</span></div>
           </article>
         ))}
       </section>
       <div className="two-column-grid" id="actividad">
         <section className="paper-section"><p className="folio">ESTADOS DE CUENTA</p><h2>Próximos vencimientos</h2>
-          {statements.length === 0 ? <p className="empty-state">No hay estados de cuenta emitidos.</p> : statements.map((item) => <p key={item.id}>{item.dueDate} · {money(item.currency, item.totalDue)}</p>)}
+          {statements.length === 0 ? <p className="empty-state">No hay estados de cuenta emitidos.</p> : statements.map((item) => <p key={item.id}>{commercialDate(item.dueDate)} · {officialMoney(item.currency, item.totalDue)}</p>)}
         </section>
         <section className="paper-section"><p className="folio">HISTORIAL</p><h2>Compras recientes</h2>
-          {purchases.length === 0 ? <p className="empty-state">No hay compras recientes.</p> : purchases.map((item) => <p key={item.id}>{item.purchasedAt.slice(0, 10)} · {money(item.currency, item.total)}</p>)}
+          {purchases.length === 0 ? <p className="empty-state">No hay compras recientes.</p> : purchases.map((item) => <p key={item.id}>{commercialInstantInLima(item.purchasedAt)} · {officialMoney(item.currency, item.total)}</p>)}
         </section>
       </div>
     </>
   );
+}
+
+function ClientArea({ api, profile, onLogout }: { api: ApiClient; profile: Profile; onLogout: () => void }) {
+  const [activeSection, setActiveSection] = useState('Mi resumen');
+  return <WorkspaceShell profile={profile} title={activeSection === 'Mi resumen' ? 'Mi CrediCuenta' : activeSection} kicker="Estado personal" navigation={clientNavigation} activeNavigation={activeSection} onNavigate={setActiveSection} onLogout={onLogout}><ClientWorkspace api={api} activeSection={activeSection} /></WorkspaceShell>;
 }
 
 export function App({ api = defaultApi }: { api?: ApiClient }) {
@@ -1742,11 +1788,7 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
   if (!profile) return <LoginPanel api={api} onAuthenticated={setProfile} />;
 
   if (profile.platformRole === 'PLATFORM_ADMIN') {
-    return (
-      <WorkspaceShell profile={profile} title="Control de plataforma" kicker="Gobierno y trazabilidad" navigation={platformNavigation} onLogout={logout}>
-        <PlatformWorkspace api={api} profile={profile} />
-      </WorkspaceShell>
-    );
+    return <PlatformArea api={api} profile={profile} onLogout={logout} />;
   }
 
   const businessAccess = profile.storeAccesses.find((access) =>
@@ -1756,9 +1798,5 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
     return <BusinessArea api={api} profile={profile} access={businessAccess} onLogout={logout} />;
   }
 
-  return (
-    <WorkspaceShell profile={profile} title="Mi CrediCuenta" kicker="Estado personal" navigation={clientNavigation} onLogout={logout}>
-      <ClientWorkspace api={api} />
-    </WorkspaceShell>
-  );
+  return <ClientArea api={api} profile={profile} onLogout={logout} />;
 }

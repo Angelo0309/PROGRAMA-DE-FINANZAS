@@ -10,6 +10,7 @@ function makeApi(profile: unknown) {
     listStores: vi.fn().mockResolvedValue([]),
     listAudit: vi.fn().mockResolvedValue([]),
     createStore: vi.fn().mockResolvedValue({ id: 'store-1', name: 'Bodega Nueva' }),
+    deactivateStore: vi.fn().mockResolvedValue({ id: 'store-1', active: false }),
     createInvitation: vi.fn().mockResolvedValue({ id: 'invitation-1', token: 'one-time-token' }),
     listClients: vi.fn().mockResolvedValue([{
       id: 'client-1',
@@ -126,6 +127,8 @@ function makeApi(profile: unknown) {
     getMyAccounts: vi.fn().mockResolvedValue([{ id: 'account-1', storeName: 'Bodega Demo', accountNumber: 'CC-001', originalOutstanding: '100.00', creditLimit: '1000.00', currency: 'PEN' }]),
     getMyStatements: vi.fn().mockResolvedValue([]),
     getMyPurchases: vi.fn().mockResolvedValue([]),
+    getMySchedule: vi.fn().mockResolvedValue([]),
+    getMyPayments: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -165,6 +168,32 @@ describe('App por roles', () => {
     fireEvent.change(screen.getByLabelText(/razón social/i), { target: { value: 'Bodega Nueva SAC' } });
     fireEvent.click(screen.getByRole('button', { name: /guardar tienda/i }));
     await waitFor(() => expect(api.createStore).toHaveBeenCalledWith(expect.objectContaining({ taxId: '20123456780' })));
+  });
+
+  it('navigates platform management and deactivates a store logically', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Plataforma', platformRole: 'PLATFORM_ADMIN', storeAccesses: [] });
+    api.listStores.mockResolvedValue([{ id: 'store-1', name: 'Comercial Demo', active: true }]);
+    api.listAudit.mockResolvedValue([{ id: 'audit-1', event: 'STORE_CREATED', entity: 'TIENDA', entityId: 'store-1', createdAt: '2026-11-01T15:30:00.000Z' }]);
+    render(<App api={api as never} />);
+    await login();
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Gestión de tiendas' }));
+    fireEvent.click(await screen.findByRole('button', { name: /desactivar comercial demo/i }));
+    await waitFor(() => expect(api.deactivateStore).toHaveBeenCalledWith('store-1'));
+    expect(screen.getByText('Inactiva')).toBeVisible();
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Auditoría' }));
+    expect(await screen.findByText('STORE_CREATED')).toBeVisible();
+  });
+
+  it('shows store deactivation errors in the store section', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Plataforma', platformRole: 'PLATFORM_ADMIN', storeAccesses: [] });
+    api.listStores.mockResolvedValue([{ id: 'store-1', name: 'Comercial Demo', active: true }]);
+    api.deactivateStore.mockRejectedValue(new Error('La tienda no pudo desactivarse.'));
+    render(<App api={api as never} />);
+    await login();
+    fireEvent.click(await screen.findByRole('button', { name: /desactivar comercial demo/i }));
+    expect(await screen.findByText('La tienda no pudo desactivarse.')).toBeVisible();
   });
 
   it('submits a business purchase using decimal strings from the API', async () => {
@@ -494,5 +523,33 @@ describe('App por roles', () => {
     expect(await screen.findByRole('heading', { name: /mi credicuenta/i })).toBeVisible();
     expect(await screen.findByText('S/ 100.00')).toBeVisible();
     expect(api.getMyAccounts).toHaveBeenCalled();
+  });
+
+  it('lets a client navigate through purchases, schedule and payment history', async () => {
+    const api = makeApi({ id: 'client-1', displayName: 'Maria Demo', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'CLIENT' }] });
+    api.getMyPurchases.mockResolvedValue([{ id: 'purchase-1', purchasedAt: '2026-10-20T15:00:00.000Z', total: '189.90', currency: 'PEN', items: [{ productId: 'product-1', description: 'Cafetera compacta', quantity: '1.0000', unitPrice: '189.9000', lineTotal: '189.90', imageUrl: 'https://images.example.com/cafetera.jpg' }] }]);
+    api.getMySchedule.mockResolvedValue([{ id: 'obligation-1', purchaseId: 'purchase-1', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '189.90', principalDue: '180.00', compensatoryInterest: '9.90', lateInterest: '0.00', amountDue: '189.90', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' }]);
+    api.getMyPayments.mockResolvedValue([{ id: 'payment-1', accountId: 'account-1', paidAt: '2026-11-01T15:30:00.000Z', currency: 'PEN', amount: '100.00', method: 'BANK_TRANSFER', receiptNumber: 'REC-001', allocations: [] }]);
+    render(<App api={api as never} />);
+    await login();
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Mis compras' }));
+    expect(await screen.findByText('Cafetera compacta')).toBeVisible();
+    expect(screen.getByRole('img', { name: 'Cafetera compacta' })).toBeVisible();
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Plan de pagos' }));
+    expect(await screen.findByRole('table', { name: /mi plan de pagos/i })).toBeVisible();
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Historial de pagos' }));
+    expect(await screen.findByText('REC-001')).toBeVisible();
+    expect(screen.getByText('S/ 100.00')).toBeVisible();
+  });
+
+  it('keeps available client balances when one secondary resource fails', async () => {
+    const api = makeApi({ id: 'client-1', displayName: 'Maria Demo', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'CLIENT' }] });
+    api.getMyPayments.mockRejectedValue(new Error('Historial temporalmente no disponible.'));
+    render(<App api={api as never} />);
+    await login();
+    expect(await screen.findByText('S/ 100.00')).toBeVisible();
+    expect(screen.getByText(/algunos datos no pudieron cargarse/i)).toBeVisible();
   });
 });

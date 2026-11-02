@@ -38,6 +38,8 @@ describe('portal controllers', () => {
     }),
     getMyStatements: vi.fn().mockResolvedValue([]),
     getMyPurchases: vi.fn().mockResolvedValue([]),
+    getMySchedule: vi.fn().mockResolvedValue([]),
+    getMyPayments: vi.fn().mockResolvedValue([]),
   };
 
   beforeEach(async () => {
@@ -81,6 +83,13 @@ describe('portal controllers', () => {
   it('derives client portal ownership from the authenticated user', async () => {
     await request(app.getHttpServer()).get('/api/v1/me/accounts').expect(200);
     expect(service.getMyAccounts).toHaveBeenCalledWith('platform-admin-1');
+  });
+
+  it('derives schedule and payment history ownership from the authenticated user', async () => {
+    await request(app.getHttpServer()).get('/api/v1/me/schedule').expect(200);
+    await request(app.getHttpServer()).get('/api/v1/me/payments').expect(200);
+    expect(service.getMySchedule).toHaveBeenCalledWith('platform-admin-1');
+    expect(service.getMyPayments).toHaveBeenCalledWith('platform-admin-1');
   });
 
   it('returns the authenticated profile used for role routing', async () => {

@@ -88,6 +88,11 @@ export interface PaymentReceiptView {
   }>;
 }
 
+export interface ClientPaymentView extends PaymentReceiptView {
+  accountId: string;
+  method: string;
+}
+
 export interface StatementView {
   id: string;
   cutAt: string;
@@ -162,6 +167,7 @@ export interface ApiClient {
     currency: string;
     timeZone: string;
   }): Promise<{ id: string; name: string; active?: boolean }>;
+  deactivateStore(storeId: string): Promise<{ id: string; active: false }>;
   createInvitation(input: {
     email: string;
     platformRole: 'PLATFORM_ADMIN' | 'USER';
@@ -211,6 +217,8 @@ export interface ApiClient {
     Array<{ id: string; dueDate: string; totalDue: string; currency: string }>
   >;
   getMyPurchases(): Promise<PurchaseView[]>;
+  getMySchedule(): Promise<ScheduleItemView[]>;
+  getMyPayments(): Promise<ClientPaymentView[]>;
 }
 
 export const ACCESS_TOKEN_KEY = 'credicuenta.accessToken';
@@ -264,6 +272,12 @@ class HttpApiClient implements ApiClient {
       '/platform/stores',
       { method: 'POST', body: JSON.stringify(input) },
     );
+  }
+
+  deactivateStore(storeId: string) {
+    return this.request<{ id: string; active: false }>(`/platform/stores/${storeId}`, {
+      method: 'DELETE',
+    });
   }
 
   createInvitation(input: Parameters<ApiClient['createInvitation']>[0]) {
@@ -381,6 +395,14 @@ class HttpApiClient implements ApiClient {
 
   getMyPurchases() {
     return this.request<PurchaseView[]>('/me/purchases');
+  }
+
+  getMySchedule() {
+    return this.request<ScheduleItemView[]>('/me/schedule');
+  }
+
+  getMyPayments() {
+    return this.request<ClientPaymentView[]>('/me/payments');
   }
 }
 
