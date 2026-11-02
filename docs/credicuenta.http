@@ -66,8 +66,13 @@ Content-Type: application/json
   "cutAt": "{{purchase.response.body.$.assignedCutAt}}"
 }
 
+### @name paymentQuote
+### Consultar el importe completo exigible para la fecha del pago
+GET {{baseUrl}}/accounts/{{accountId}}/payment-quote?storeId={{storeId}}&paidAt={{purchase.response.body.$.obligations[0].dueDate}}T12:00:00-05:00
+Authorization: Bearer {{accessToken}}
+
 ### @name payment
-### Pagar completamente la obligacion
+### Pagar exactamente el importe oficial cotizado
 POST {{baseUrl}}/accounts/{{accountId}}/payments
 Authorization: Bearer {{accessToken}}
 Idempotency-Key: demo-payment-{{$guid}}
@@ -77,7 +82,7 @@ Content-Type: application/json
   "storeId": "{{storeId}}",
   "paidAt": "{{purchase.response.body.$.obligations[0].dueDate}}T12:00:00-05:00",
   "currency": "PEN",
-  "amount": "{{purchase.response.body.$.obligations[0].amountDue}}"
+  "amount": "{{paymentQuote.response.body.$.amount}}"
 }
 
 ### Ver el comprobante del pago

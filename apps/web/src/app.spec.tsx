@@ -103,6 +103,21 @@ function makeApi(profile: unknown) {
       { id: 'obligation-2', purchaseId: 'purchase-1', installmentNumber: 2, dueDate: '2026-12-28', openingBalance: '205.00', principalDue: '98.00', compensatoryInterest: '2.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
       { id: 'obligation-3', purchaseId: 'purchase-2', installmentNumber: 1, dueDate: '2026-10-28', openingBalance: '50.00', principalDue: '50.00', compensatoryInterest: '0.00', lateInterest: '1.00', amountDue: '51.00', paidAmount: '0.00', currency: 'PEN', status: 'OVERDUE' },
     ]),
+    getPaymentQuote: vi.fn().mockResolvedValue({
+      accountId: 'account-1',
+      paidOn: '2026-11-01',
+      currency: 'PEN',
+      amount: '51.20',
+      obligations: [{ id: 'obligation-3', dueDate: '2026-10-28', lateDays: 3, lateInterest: '1.20', compensatoryInterest: '0.00', principal: '50.00' }],
+    }),
+    createPayment: vi.fn().mockResolvedValue({ id: 'payment-1', receiptNumber: 'RC-000001', amount: '51.20', currency: 'PEN' }),
+    getReceipt: vi.fn().mockResolvedValue({
+      id: 'payment-1', receiptNumber: 'RC-000001', paidAt: '2026-11-01T10:00:00-05:00', currency: 'PEN', amount: '51.20',
+      allocations: [
+        { obligationId: 'obligation-3', lateInterestPaid: '1.20', compensatoryPaid: '0.00', principalPaid: '50.00' },
+        { obligationId: 'obligation-4', lateInterestPaid: '2.00', compensatoryPaid: '3.00', principalPaid: '45.00' },
+      ],
+    }),
     createPurchase: vi.fn().mockResolvedValue({ id: 'purchase-1', total: '100.00' }),
     getMyAccounts: vi.fn().mockResolvedValue([{ id: 'account-1', storeName: 'Bodega Demo', accountNumber: 'CC-001', originalOutstanding: '100.00', creditLimit: '1000.00', currency: 'PEN' }]),
     getMyStatements: vi.fn().mockResolvedValue([]),
@@ -373,6 +388,33 @@ describe('App por roles', () => {
     fireEvent.change(selector, { target: { value: 'account-2' } });
     await waitFor(() => expect(screen.queryAllByText('28/11/2026')).toHaveLength(0));
     finishSecond?.([]);
+  });
+
+  it('registers the exact full payment quoted by the API and presents its receipt', async () => {
+    const api = makeApi({ id: 'operator-1', displayName: 'Operador', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'OPERATOR' }] });
+    render(<App api={api as never} />);
+    await login();
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Registrar pago' }));
+
+    expect(await screen.findByRole('heading', { name: 'Registrar pago', level: 1 })).toBeVisible();
+    fireEvent.change(screen.getByLabelText(/cuenta del cliente/i), { target: { value: 'account-1' } });
+    await waitFor(() => expect(api.getPaymentQuote).toHaveBeenCalledWith('account-1', 'store-1', expect.any(String)));
+    expect(await screen.findByText('S/ 51.20')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: /registrar pago completo/i }));
+    await waitFor(() => expect(api.createPayment).toHaveBeenCalledWith('account-1', expect.objectContaining({
+      storeId: 'store-1',
+      currency: 'PEN',
+      amount: '51.20',
+      idempotencyKey: expect.any(String),
+    })));
+    await waitFor(() => expect(api.getReceipt).toHaveBeenCalledWith('payment-1', 'store-1'));
+    expect(await screen.findByText('RC-000001')).toBeVisible();
+    expect(screen.getByText(/pago registrado correctamente/i)).toBeVisible();
+    expect(screen.getByText('obligation-3')).toBeVisible();
+    expect(screen.getByText('obligation-4')).toBeVisible();
+    expect(api.listAccounts).toHaveBeenCalledTimes(2);
   });
 
   it('does not submit a purchase command twice while the first request is pending', async () => {

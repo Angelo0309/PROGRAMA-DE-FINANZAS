@@ -18,6 +18,8 @@ import {
   type ApiClient,
   type ClientView,
   type CreditConditionView,
+  type PaymentQuoteView,
+  type PaymentReceiptView,
   type ProductView,
   type Profile,
   type ScheduleItemView,
@@ -1290,6 +1292,136 @@ function PaymentPlans({ api, access, accounts }: { api: ApiClient; access: Store
   );
 }
 
+function PaymentRegistration({
+  api,
+  access,
+  accounts,
+  onPaymentSaved,
+}: {
+  api: ApiClient;
+  access: StoreAccess;
+  accounts: AccountView[];
+  onPaymentSaved: () => Promise<void>;
+}) {
+  const [accountId, setAccountId] = useState('');
+  const [quote, setQuote] = useState<PaymentQuoteView | null>(null);
+  const [receipt, setReceipt] = useState<PaymentReceiptView | null>(null);
+  const [paymentInstant, setPaymentInstant] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const quoteRequest = useRef(0);
+  const paymentKey = useRef<string | null>(null);
+  const paymentInFlight = useRef(false);
+  const selectedAccount = accounts.find((account) => account.id === accountId);
+
+  useEffect(() => {
+    const requestId = ++quoteRequest.current;
+    setQuote(null);
+    setReceipt(null);
+    setError('');
+    setNotice('');
+    paymentKey.current = null;
+    if (!accountId) {
+      setLoading(false);
+      return;
+    }
+    const paidAt = new Date().toISOString();
+    setPaymentInstant(paidAt);
+    setLoading(true);
+    void api.getPaymentQuote(accountId, access.storeId, paidAt)
+      .then((nextQuote) => {
+        if (quoteRequest.current === requestId) setQuote(nextQuote);
+      })
+      .catch((reason: unknown) => {
+        if (quoteRequest.current === requestId) {
+          setError(reason instanceof Error ? reason.message : 'No fue posible consultar el importe exigible.');
+        }
+      })
+      .finally(() => {
+        if (quoteRequest.current === requestId) setLoading(false);
+      });
+  }, [access.storeId, accountId, api]);
+
+  async function submitPayment() {
+    if (!quote || !accountId || paymentInFlight.current) return;
+    paymentInFlight.current = true;
+    setSubmitting(true);
+    setError('');
+    setNotice('');
+    const idempotencyKey = paymentKey.current ?? crypto.randomUUID();
+    paymentKey.current = idempotencyKey;
+    try {
+      const payment = await api.createPayment(accountId, {
+        storeId: access.storeId,
+        paidAt: paymentInstant,
+        currency: quote.currency,
+        amount: quote.amount,
+        idempotencyKey,
+      });
+      const nextReceipt = await api.getReceipt(payment.id, access.storeId);
+      setReceipt(nextReceipt);
+      setQuote(null);
+      setNotice('Pago registrado correctamente.');
+      paymentKey.current = null;
+      await onPaymentSaved();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'No fue posible registrar el pago.');
+    } finally {
+      paymentInFlight.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="payment-page">
+      <div className="page-lead"><p>Registra únicamente el pago completo exigible. La mora y la prelación se calculan en el servidor.</p></div>
+      <section className="schedule-selector payment-selector">
+        <label htmlFor="payment-account">Cuenta del cliente</label>
+        <select id="payment-account" value={accountId} onChange={(event) => setAccountId(event.target.value)}>
+          <option value="">Seleccione una cuenta</option>
+          {accounts.map((account) => <option key={account.id} value={account.id}>{account.customerName} · {account.accountNumber}</option>)}
+        </select>
+      </section>
+
+      {error && <Alert severity="error">{error}</Alert>}
+      {notice && <Alert severity="success">{notice}</Alert>}
+      {loading ? (
+        <div className="schedule-loading"><CircularProgress size={24} /><span>Calculando el importe exigible…</span></div>
+      ) : selectedAccount && quote ? (
+        <div className="payment-layout">
+          <section className="payment-quote" aria-label="Importe exigible">
+            <p className="folio">PAGO COMPLETO</p>
+            <h2>{selectedAccount.customerName}</h2>
+            <span className="payment-account-number">Cuenta {selectedAccount.accountNumber} · Fecha {commercialDate(quote.paidOn)}</span>
+            <div className="payment-total"><span>Importe oficial a pagar</span><strong>{money(quote.currency, quote.amount)}</strong></div>
+            <p className="field-help">El importe no puede editarse. Incluye todas las obligaciones vencidas y exigibles a la fecha.</p>
+            <button className="primary-button" type="button" disabled={submitting || quote.obligations.length === 0} onClick={submitPayment}>
+              {submitting ? 'Registrando pago…' : 'Registrar pago completo'}
+            </button>
+          </section>
+          <section className="catalog-panel payment-breakdown" aria-labelledby="payment-breakdown-title">
+            <div className="catalog-panel-heading"><div><p className="folio">APLICACIÓN DEL PAGO</p><h2 id="payment-breakdown-title">Obligaciones exigibles</h2></div><span>{quote.obligations.length} obligaciones</span></div>
+            {quote.obligations.length === 0 ? <p className="empty-state schedule-empty">Esta cuenta no tiene obligaciones exigibles para pagar hoy.</p> : (
+              <div className="table-wrapper"><table aria-label="Detalle del pago"><thead><tr><th>Vencimiento</th><th>Días de mora</th><th>Mora</th><th>Interés</th><th>Capital</th></tr></thead><tbody>{quote.obligations.map((item) => <tr key={item.id}><td>{commercialDate(item.dueDate)}</td><td>{item.lateDays}</td><td>{money(quote.currency, item.lateInterest)}</td><td>{money(quote.currency, item.compensatoryInterest)}</td><td className="money-cell">{money(quote.currency, item.principal)}</td></tr>)}</tbody></table></div>
+            )}
+          </section>
+        </div>
+      ) : receipt ? (
+        <section className="receipt-card" aria-label="Comprobante de pago">
+          <div><p className="folio">COMPROBANTE DE PAGO</p><h2>{receipt.receiptNumber}</h2><span>{new Date(receipt.paidAt).toLocaleString('es-PE')}</span></div>
+          <strong>{money(receipt.currency, receipt.amount)}</strong>
+          <div className="receipt-allocations table-wrapper">
+            <table aria-label="Aplicación del comprobante"><thead><tr><th>Obligación</th><th>Mora</th><th>Interés</th><th>Capital</th></tr></thead><tbody>{receipt.allocations.map((item) => <tr key={item.obligationId}><td>{item.obligationId}</td><td>{money(receipt.currency, item.lateInterestPaid)}</td><td>{money(receipt.currency, item.compensatoryPaid)}</td><td className="money-cell">{money(receipt.currency, item.principalPaid)}</td></tr>)}</tbody></table>
+          </div>
+        </section>
+      ) : accountId ? null : <p className="empty-state payment-empty">Seleccione una cuenta para consultar el pago exigible.</p>}
+      <p className="audit-note">La aplicación respeta la prelación: mora, interés compensatorio y capital. No se aceptan pagos parciales ni excesivos.</p>
+    </section>
+  );
+}
+
 function BusinessWorkspace({
   api,
   profile,
@@ -1386,6 +1518,10 @@ function BusinessWorkspace({
     return <PaymentPlans api={api} access={access} accounts={accounts} />;
   }
 
+  if (activeSection === 'Registrar pago') {
+    return <PaymentRegistration api={api} access={access} accounts={accounts} onPaymentSaved={refreshAccounts} />;
+  }
+
   return (
     <>
       <section className="metric-strip">
@@ -1420,7 +1556,7 @@ function BusinessArea({
   onLogout: () => void;
 }) {
   const [activeSection, setActiveSection] = useState('Panel del negocio');
-  const availableNavigation = ['Panel del negocio', 'Productos y servicios', 'Clientes', 'Registrar compra', 'Cuentas corrientes', 'Planes de pago'];
+  const availableNavigation = ['Panel del negocio', 'Productos y servicios', 'Clientes', 'Registrar compra', 'Cuentas corrientes', 'Planes de pago', 'Registrar pago'];
   const title = activeSection === 'Productos y servicios'
     ? 'Productos y servicios'
     : activeSection === 'Clientes'
@@ -1431,6 +1567,8 @@ function BusinessArea({
           ? 'Cuentas corrientes'
           : activeSection === 'Planes de pago'
             ? 'Planes de pago'
+            : activeSection === 'Registrar pago'
+              ? 'Registrar pago'
             : 'Mesa de crédito';
 
   return (

@@ -144,6 +144,66 @@ paths:
           schema: { type: string }
       responses:
         "201": { description: Compra registrada }
+  /accounts/{accountId}/payment-quote:
+    get:
+      operationId: getPaymentQuote
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/accountId"
+        - name: storeId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: paidAt
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Importe completo exigible calculado para la fecha de pago
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentQuote"
+  /accounts/{accountId}/payments:
+    post:
+      operationId: createPayment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/accountId"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 100 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201": { description: Pago completo registrado }
+        "400": { description: Importe parcial, excesivo, moneda incorrecta o sin deuda exigible }
+  /payments/{paymentId}/receipt:
+    get:
+      operationId: getPaymentReceipt
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: storeId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Comprobante con aplicación a mora, interés y capital
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentReceipt"
   /me/accounts:
     get:
       operationId: getMyAccounts
@@ -232,3 +292,50 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/StoreAccess"
+    PaymentInput:
+      type: object
+      required: [storeId, paidAt, currency, amount]
+      properties:
+        storeId: { type: string, format: uuid }
+        paidAt: { type: string, format: date-time }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        amount: { $ref: "#/components/schemas/DecimalString" }
+    PaymentQuote:
+      type: object
+      required: [accountId, paidOn, currency, amount, obligations]
+      properties:
+        accountId: { type: string, format: uuid }
+        paidOn: { type: string, format: date }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        amount: { $ref: "#/components/schemas/DecimalString" }
+        obligations:
+          type: array
+          items:
+            type: object
+            required: [id, dueDate, lateDays, lateInterest, compensatoryInterest, principal]
+            properties:
+              id: { type: string, format: uuid }
+              dueDate: { type: string, format: date }
+              lateDays: { type: integer, minimum: 0 }
+              lateInterest: { $ref: "#/components/schemas/DecimalString" }
+              compensatoryInterest: { $ref: "#/components/schemas/DecimalString" }
+              principal: { $ref: "#/components/schemas/DecimalString" }
+    PaymentReceipt:
+      type: object
+      required: [id, receiptNumber, paidAt, currency, amount, allocations]
+      properties:
+        id: { type: string, format: uuid }
+        receiptNumber: { type: string }
+        paidAt: { type: string, format: date-time }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        amount: { $ref: "#/components/schemas/DecimalString" }
+        allocations:
+          type: array
+          items:
+            type: object
+            required: [obligationId, lateInterestPaid, compensatoryPaid, principalPaid]
+            properties:
+              obligationId: { type: string, format: uuid }
+              lateInterestPaid: { $ref: "#/components/schemas/DecimalString" }
+              compensatoryPaid: { $ref: "#/components/schemas/DecimalString" }
+              principalPaid: { $ref: "#/components/schemas/DecimalString" }

@@ -65,6 +65,10 @@ const accountSchema = z.object({
   creditLimit: decimal,
   initialCondition: conditionSchema.omit({ storeId: true }).optional(),
 });
+const paymentQuoteSchema = z.object({
+  storeId: z.string().min(1),
+  paidAt: z.string().datetime({ offset: true }),
+});
 
 function parse<T>(schema: ZodType<T>, body: unknown): T {
   const result = schema.safeParse(body);
@@ -226,6 +230,15 @@ export class BusinessController {
     @Query('storeId') storeId: string | undefined,
   ) {
     return this.service.getSchedule(requireStoreId(storeId), accountId);
+  }
+
+  @Get('accounts/:accountId/payment-quote')
+  getPaymentQuote(
+    @Param('accountId') accountId: string,
+    @Query() query: unknown,
+  ) {
+    const { storeId, paidAt } = parse(paymentQuoteSchema, query);
+    return this.service.getPaymentQuote(storeId, accountId, paidAt);
   }
 
   @Get('accounts/:accountId/statements')

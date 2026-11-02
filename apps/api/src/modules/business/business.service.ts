@@ -1,6 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Decimal } from 'decimal.js';
+import { DateTime } from 'luxon';
 
 import { PrismaService } from '../../database/prisma.service.js';
+import { calculateAmountDue } from '../finance/domain/financial-engine.js';
 
 @Injectable()
 export class BusinessService {
@@ -378,6 +381,51 @@ export class BusinessService {
       currency: item.credit.currency,
       status: item.status,
     }));
+  }
+
+  async getPaymentQuote(storeId: string, accountId: string, paidAt: string) {
+    const account = await this.prisma.creditAccount.findFirst({
+      where: { id: accountId, storeId, active: true },
+      select: { id: true, currency: true },
+    });
+    if (!account) throw new NotFoundException('Cuenta de crédito no encontrada.');
+    const paymentInstant = DateTime.fromISO(paidAt, { setZone: true }).setZone('America/Lima');
+    if (!paymentInstant.isValid) throw new BadRequestException('Fecha de pago inválida.');
+    const paidOn = paymentInstant.toISODate()!;
+    const obligations = await this.prisma.obligation.findMany({
+      where: {
+        credit: { storeId, accountId },
+        dueDate: { lte: new Date(`${paidOn}T00:00:00.000Z`) },
+        status: { in: ['PENDING', 'OVERDUE'] },
+      },
+      include: { credit: { select: { lateDailyRate: true } } },
+      orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+    });
+    const due = calculateAmountDue({
+      paidAt: paidOn,
+      obligations: obligations.map((obligation) => ({
+        id: obligation.id,
+        dueDate: obligation.dueDate.toISOString().slice(0, 10),
+        baseAmount: obligation.amountDue.toString(),
+        compensatoryInterest: obligation.compensatoryInterest.toString(),
+        originalPrincipal: obligation.principalDue.toString(),
+        lateDailyRate: new Decimal(obligation.credit.lateDailyRate.toString()),
+      })),
+    });
+    return {
+      accountId,
+      paidOn,
+      currency: account.currency,
+      amount: due.moneyTotal,
+      obligations: due.lines.map((line) => ({
+        id: line.id,
+        dueDate: line.dueDate,
+        lateDays: line.lateDays,
+        lateInterest: line.lateInterest.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
+        compensatoryInterest: line.compensatoryInterest.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
+        principal: line.originalPrincipal.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
+      })),
+    };
   }
 
   async getStatements(storeId: string, accountId: string) {

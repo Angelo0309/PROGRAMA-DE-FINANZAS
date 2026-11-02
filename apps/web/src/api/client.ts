@@ -59,6 +59,35 @@ export interface ScheduleItemView {
   status: string;
 }
 
+export interface PaymentQuoteView {
+  accountId: string;
+  paidOn: string;
+  currency: string;
+  amount: string;
+  obligations: Array<{
+    id: string;
+    dueDate: string;
+    lateDays: number;
+    lateInterest: string;
+    compensatoryInterest: string;
+    principal: string;
+  }>;
+}
+
+export interface PaymentReceiptView {
+  id: string;
+  receiptNumber: string;
+  paidAt: string;
+  currency: string;
+  amount: string;
+  allocations: Array<{
+    obligationId: string;
+    lateInterestPaid: string;
+    compensatoryPaid: string;
+    principalPaid: string;
+  }>;
+}
+
 export interface ClientView {
   id: string;
   documentType: string;
@@ -145,6 +174,15 @@ export interface ApiClient {
   }): Promise<AccountView>;
   addCreditCondition(accountId: string, input: CreditConditionInput): Promise<CreditConditionView>;
   getSchedule(accountId: string, storeId: string): Promise<ScheduleItemView[]>;
+  getPaymentQuote(accountId: string, storeId: string, paidAt: string): Promise<PaymentQuoteView>;
+  createPayment(accountId: string, input: {
+    storeId: string;
+    paidAt: string;
+    currency: string;
+    amount: string;
+    idempotencyKey?: string;
+  }): Promise<{ id: string; receiptNumber: string; currency: string; amount: string }>;
+  getReceipt(paymentId: string, storeId: string): Promise<PaymentReceiptView>;
   createPurchase(
     storeId: string,
     input: {
@@ -273,6 +311,29 @@ class HttpApiClient implements ApiClient {
   getSchedule(accountId: string, storeId: string) {
     return this.request<ScheduleItemView[]>(
       `/accounts/${accountId}/schedule?storeId=${encodeURIComponent(storeId)}`,
+    );
+  }
+
+  getPaymentQuote(accountId: string, storeId: string, paidAt: string) {
+    const query = new URLSearchParams({ storeId, paidAt });
+    return this.request<PaymentQuoteView>(`/accounts/${accountId}/payment-quote?${query.toString()}`);
+  }
+
+  createPayment(accountId: string, input: Parameters<ApiClient['createPayment']>[1]) {
+    const { idempotencyKey, ...command } = input;
+    return this.request<{ id: string; receiptNumber: string; currency: string; amount: string }>(
+      `/accounts/${accountId}/payments`,
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey ?? crypto.randomUUID() },
+        body: JSON.stringify(command),
+      },
+    );
+  }
+
+  getReceipt(paymentId: string, storeId: string) {
+    return this.request<PaymentReceiptView>(
+      `/payments/${paymentId}/receipt?storeId=${encodeURIComponent(storeId)}`,
     );
   }
 

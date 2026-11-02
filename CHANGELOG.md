@@ -14,4 +14,5 @@
 - Pantalla guiada de compras con multiples conceptos, imagenes y modalidades de fin de mes o cuotas.
 - Gestion web de cuentas corrientes con limites, saldos y condiciones crediticias vigentes.
 - Consulta web del cronograma oficial de cuotas, vencimientos, intereses y estados.
+- Registro web de pagos completos con cotización oficial, idempotencia y comprobante detallado.
 - Prisma, migracion, semillas ficticias, Docker, CI y guias de despliegue.

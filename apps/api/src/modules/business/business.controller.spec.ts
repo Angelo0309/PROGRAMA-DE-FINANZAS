@@ -33,6 +33,7 @@ describe('BusinessController', () => {
     listAccounts: vi.fn().mockResolvedValue([]),
     addCreditCondition: vi.fn(),
     getSchedule: vi.fn().mockResolvedValue([]),
+    getPaymentQuote: vi.fn().mockResolvedValue({ accountId: 'account-1', amount: '100.20', currency: 'PEN', obligations: [] }),
     getStatements: vi.fn().mockResolvedValue([]),
     getReceipt: vi.fn(),
     deactivateClient: vi.fn().mockResolvedValue({ id: 'client-1', active: false }),
@@ -129,5 +130,21 @@ describe('BusinessController', () => {
     expect(service.deactivateClient).toHaveBeenCalledWith('store-1', 'client-1', 'admin-1');
     expect(service.deactivateProduct).toHaveBeenCalledWith('store-1', 'product-1', 'admin-1');
     expect(service.deactivateAccount).toHaveBeenCalledWith('store-1', 'account-1', 'admin-1');
+  });
+
+  it('exposes the official payment quote for an account and payment instant', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/accounts/account-1/payment-quote')
+      .query({ storeId: 'store-1', paidAt: '2026-10-30T10:00:00-05:00' })
+      .expect(200)
+      .expect((response) => {
+        expect(response.body).toEqual(expect.objectContaining({ amount: '100.20', currency: 'PEN' }));
+      });
+
+    expect(service.getPaymentQuote).toHaveBeenCalledWith(
+      'store-1',
+      'account-1',
+      '2026-10-30T10:00:00-05:00',
+    );
   });
 });

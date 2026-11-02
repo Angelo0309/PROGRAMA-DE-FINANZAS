@@ -122,3 +122,39 @@ describe('BusinessService account conditions', () => {
     expect(result).toEqual(expect.objectContaining({ id: 'account-2', currentCondition: expect.objectContaining({ id: 'condition-2' }) }));
   });
 });
+
+describe('BusinessService payment quote', () => {
+  it('calculates the complete payable amount for the selected Lima payment date', async () => {
+    const prisma = {
+      creditAccount: { findFirst: vi.fn().mockResolvedValue({ id: 'account-1', currency: 'PEN' }) },
+      obligation: { findMany: vi.fn().mockResolvedValue([{
+        id: 'obligation-1',
+        dueDate: new Date('2026-10-28T00:00:00.000Z'),
+        amountDue: { toString: () => '100.000000000000' },
+        compensatoryInterest: { toString: () => '5.000000000000' },
+        principalDue: { toString: () => '95.000000000000' },
+        credit: { lateDailyRate: { toString: () => '0.001000000000000' } },
+      }]) },
+    } as unknown as PrismaService;
+    const service = new BusinessService(prisma);
+
+    const quote = await (service as unknown as {
+      getPaymentQuote(storeId: string, accountId: string, paidAt: string): Promise<unknown>;
+    }).getPaymentQuote('store-1', 'account-1', '2026-10-30T10:00:00-05:00');
+
+    expect(quote).toEqual({
+      accountId: 'account-1',
+      paidOn: '2026-10-30',
+      currency: 'PEN',
+      amount: '100.20',
+      obligations: [{
+        id: 'obligation-1',
+        dueDate: '2026-10-28',
+        lateDays: 2,
+        lateInterest: '0.20',
+        compensatoryInterest: '5.00',
+        principal: '95.00',
+      }],
+    });
+  });
+});
