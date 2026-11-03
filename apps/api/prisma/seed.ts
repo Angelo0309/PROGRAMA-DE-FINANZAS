@@ -1,14 +1,13 @@
 import 'dotenv/config';
 
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import { randomUUID } from 'node:crypto';
 import { Algorithm, hash } from '@node-rs/argon2';
 
-import { PrismaClient } from '../src/generated/prisma/client.js';
+import { PrismaService } from '../src/database/prisma.service.js';
+import { CreditOperationsService } from '../src/modules/operations/credit-operations.service.js';
+import { PrismaCreditOperationsRepository } from '../src/modules/operations/prisma-credit-operations.repository.js';
 
-const databaseUrl =
-  process.env.DATABASE_URL ??
-  'mysql://credicuenta:change_me@127.0.0.1:3306/CrediCuentaDB';
-const prisma = new PrismaClient({ adapter: new PrismaMariaDb(databaseUrl) });
+const prisma = new PrismaService();
 
 const passwordHash = await hash('DemoSegura#2026', {
   algorithm: Algorithm.Argon2id,
@@ -115,7 +114,22 @@ const account = await prisma.creditAccount.upsert({
   },
 });
 
-await prisma.creditCondition.upsert({
+const demoPaymentAccount = await prisma.creditAccount.upsert({
+  where: {
+    storeId_accountNumber: { storeId: store.id, accountNumber: 'CC-DEMO-PAGO' },
+  },
+  update: { customerId: customer.id, active: true, creditLimit: '1000.0000' },
+  create: {
+    id: '40000000-0000-4000-8000-000000000002',
+    storeId: store.id,
+    customerId: customer.id,
+    accountNumber: 'CC-DEMO-PAGO',
+    currency: 'PEN',
+    creditLimit: '1000.0000',
+  },
+});
+
+const accountCondition = await prisma.creditCondition.upsert({
   where: { accountId_version: { accountId: account.id, version: 1 } },
   update: {},
   create: {
@@ -131,6 +145,26 @@ await prisma.creditCondition.upsert({
     maxInstallments: 12,
     graceMonths: 0,
     validFrom: new Date('2026-01-01T00:00:00-05:00'),
+  },
+});
+
+await prisma.creditCondition.upsert({
+  where: { accountId_version: { accountId: demoPaymentAccount.id, version: 1 } },
+  update: {},
+  create: {
+    id: '50000000-0000-4000-8000-000000000002',
+    storeId: store.id,
+    accountId: demoPaymentAccount.id,
+    version: 1,
+    compensatoryRateKind: accountCondition.compensatoryRateKind,
+    compensatoryRate: accountCondition.compensatoryRate,
+    lateRateKind: accountCondition.lateRateKind,
+    lateRate: accountCondition.lateRate,
+    billingDay: accountCondition.billingDay,
+    dueDay: accountCondition.dueDay,
+    maxInstallments: accountCondition.maxInstallments,
+    graceMonths: accountCondition.graceMonths,
+    validFrom: accountCondition.validFrom,
   },
 });
 
@@ -161,6 +195,31 @@ for (const product of [
     create: { ...product, storeId: store.id, currency: 'PEN' },
   });
 }
+
+const demoProduct = await prisma.productService.findUniqueOrThrow({
+  where: { storeId_sku: { storeId: store.id, sku: 'PROD-001' } },
+});
+const operations = new CreditOperationsService(
+  new PrismaCreditOperationsRepository(prisma),
+  randomUUID,
+);
+const demoPurchase = await operations.createPurchase({
+  storeId: store.id,
+  accountId: demoPaymentAccount.id,
+  operatorUserId: businessAdmin.id,
+  idempotencyKey: 'demo-payable-purchase-v1',
+  purchasedAt: '2026-09-20T10:00:00-05:00',
+  currency: 'PEN',
+  mode: 'END_OF_MONTH',
+  items: [{ productId: demoProduct.id, quantity: '1' }],
+});
+const demoCutAt = new Date(demoPurchase.assignedCutAt).toISOString();
+await operations.createCut({
+  storeId: store.id,
+  accountId: demoPaymentAccount.id,
+  idempotencyKey: `auto:${demoPaymentAccount.id}:${demoCutAt}`,
+  cutAt: demoCutAt,
+});
 
 await prisma.auditEvent.create({
   data: {

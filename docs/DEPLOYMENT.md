@@ -44,8 +44,16 @@ La API ejecuta `prisma migrate deploy` automáticamente al iniciar. La semilla
 no se ejecuta automáticamente para evitar sobrescribir o recrear usuarios de
 demostración en cada reinicio.
 
+La semilla prepara `CC-DEMO-PAGO` con una compra, un corte emitido y una
+obligación vencida sin pago. Ejecútela una sola vez en cloud. Antes de la
+exposición compruebe que la cuenta y la cotización estén visibles, pero reserve
+el pago cloud para la demostración final: al pagarlo, la obligación queda
+correctamente cerrada y no vuelve a aparecer como exigible.
+
 Los planes gratuitos pueden suspenderse. Antes de exponer, abra primero
-`/api/v1/health/ready`, inicie sesion y compruebe compra, corte y pago.
+`/api/v1/health/ready`, inicie sesión y compruebe compra, corte y cotización.
+El recorrido completo con pago y comprobante se ensaya en la base local
+descartable descrita en `docs/TESTING.md`.
 
 ## Respaldo y restauracion
 

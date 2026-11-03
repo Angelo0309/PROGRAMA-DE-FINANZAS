@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../src/database/prisma.service.js';
 import { AuthService } from '../src/modules/auth/auth.service.js';
 import { PrismaAuthRepository } from '../src/modules/auth/prisma-auth.repository.js';
+import { BusinessService } from '../src/modules/business/business.service.js';
 import { CreditOperationsService } from '../src/modules/operations/credit-operations.service.js';
 import { PrismaCreditOperationsRepository } from '../src/modules/operations/prisma-credit-operations.repository.js';
 import { billingCutForDueDate } from '../src/modules/operations/billing-cut.js';
@@ -45,6 +46,88 @@ integration('MariaDB integration', () => {
     await expect(auth.refresh(tokens.refreshToken)).rejects.toMatchObject({
       status: 401,
     });
+  });
+
+  it('loads the deterministic payable demo without prepaying it', async () => {
+    const store = await prisma.store.findUniqueOrThrow({ where: { taxId: '20123456789' } });
+    const account = await prisma.creditAccount.findUniqueOrThrow({
+      where: {
+        storeId_accountNumber: { storeId: store.id, accountNumber: 'CC-DEMO-PAGO' },
+      },
+      include: {
+        purchases: {
+          include: {
+            credit: { include: { obligations: { include: { cutDetails: true } } } },
+          },
+        },
+        cuts: { include: { details: true } },
+        payments: true,
+      },
+    });
+    const purchase = account.purchases[0]!;
+    const obligation = purchase.credit!.obligations[0]!;
+
+    expect(account.purchases).toHaveLength(1);
+    expect(purchase.idempotencyKey).toBe('demo-payable-purchase-v1');
+    expect(purchase.credit!.obligations).toHaveLength(1);
+    expect(obligation.status).toBe('PENDING');
+    expect(obligation.dueDate.toISOString().slice(0, 10) < '2026-11-03').toBe(true);
+    expect(account.cuts).toHaveLength(1);
+    expect(account.cuts[0]!.details.map((detail) => detail.obligationId)).toEqual([obligation.id]);
+    expect(account.payments).toHaveLength(0);
+
+    const product = await prisma.productService.findUniqueOrThrow({
+      where: { storeId_sku: { storeId: store.id, sku: 'PROD-001' } },
+    });
+    const operations = new CreditOperationsService(
+      new PrismaCreditOperationsRepository(prisma),
+      randomUUID,
+    );
+    const repeatedPurchase = await operations.createPurchase({
+      storeId: store.id,
+      accountId: account.id,
+      operatorUserId: '20000000-0000-4000-8000-000000000002',
+      idempotencyKey: 'demo-payable-purchase-v1',
+      purchasedAt: '2026-09-20T10:00:00-05:00',
+      currency: 'PEN',
+      mode: 'END_OF_MONTH',
+      items: [{ productId: product.id, quantity: '1' }],
+    });
+    const cutAt = new Date(repeatedPurchase.assignedCutAt).toISOString();
+    const repeatedCut = await operations.createCut({
+      storeId: store.id,
+      accountId: account.id,
+      idempotencyKey: `auto:${account.id}:${cutAt}`,
+      cutAt,
+    });
+
+    expect(repeatedPurchase.id).toBe(purchase.id);
+    expect(repeatedCut.id).toBe(account.cuts[0]!.id);
+    await expect(prisma.purchase.count({ where: { accountId: account.id } })).resolves.toBe(1);
+    await expect(prisma.cut.count({ where: { accountId: account.id } })).resolves.toBe(1);
+
+    const quote = await new BusinessService(prisma).getPaymentQuote(
+      store.id,
+      account.id,
+      '2026-11-03T12:00:00-05:00',
+    );
+    expect(new Decimal(quote.amount).gt(0)).toBe(true);
+    const paymentInput = {
+      storeId: store.id,
+      accountId: account.id,
+      operatorUserId: '20000000-0000-4000-8000-000000000002',
+      idempotencyKey: 'integration-demo-payable-payment-v1',
+      paidAt: '2026-11-03T12:00:00-05:00',
+      currency: 'PEN',
+      amount: quote.amount,
+    };
+    const payment = await operations.createPayment(paymentInput);
+
+    expect(payment.amount).toBe(quote.amount);
+    expect(payment.receiptNumber).toMatch(/^RC-/);
+    await expect(operations.createPayment(paymentInput)).resolves.toMatchObject({ id: payment.id });
+    await expect(prisma.obligation.findUniqueOrThrow({ where: { id: obligation.id } }))
+      .resolves.toMatchObject({ status: 'PAID' });
   });
 
   it('persists an idempotent purchase, cut and full payment transactionally', async () => {
