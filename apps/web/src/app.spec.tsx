@@ -267,6 +267,53 @@ describe('App por roles', () => {
     await waitFor(() => expect(api.createStore).toHaveBeenCalledWith(expect.objectContaining({ taxId: '20123456780' })));
   });
 
+  it('shows a one-time activation link after creating a business administrator invitation', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Plataforma', platformRole: 'PLATFORM_ADMIN', storeAccesses: [] });
+    api.listStores.mockResolvedValue([{ id: 'store-1', name: 'Comercial Demo', active: true }]);
+    render(<App api={api as never} />);
+    await login();
+
+    await screen.findByRole('option', { name: 'Comercial Demo' });
+    fireEvent.change(screen.getByLabelText(/tienda asignada/i), { target: { value: 'store-1' } });
+    fireEvent.change(screen.getByLabelText(/correo del administrador/i), { target: { value: 'nuevo.admin@credicuenta.test' } });
+    fireEvent.click(screen.getByRole('button', { name: /crear invitación/i }));
+
+    const link = await screen.findByLabelText(/enlace de activación/i);
+    expect(link).toHaveValue(`${window.location.origin}/activar?token=one-time-token`);
+    expect(link).toHaveAttribute('readonly');
+    expect(api.createInvitation).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'nuevo.admin@credicuenta.test',
+      platformRole: 'USER',
+      storeId: 'store-1',
+      storeRole: 'STORE_ADMIN',
+    }));
+    expect(screen.getByText(/se muestra una sola vez/i)).toBeVisible();
+  });
+
+  it('keeps the activation link selectable when clipboard access is unavailable', async () => {
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    try {
+      const api = makeApi({ id: 'admin-1', displayName: 'Admin Plataforma', platformRole: 'PLATFORM_ADMIN', storeAccesses: [] });
+      api.listStores.mockResolvedValue([{ id: 'store-1', name: 'Comercial Demo', active: true }]);
+      render(<App api={api as never} />);
+      await login();
+
+      await screen.findByRole('option', { name: 'Comercial Demo' });
+      fireEvent.change(screen.getByLabelText(/tienda asignada/i), { target: { value: 'store-1' } });
+      fireEvent.change(screen.getByLabelText(/correo del administrador/i), { target: { value: 'nuevo.admin@credicuenta.test' } });
+      fireEvent.click(screen.getByRole('button', { name: /crear invitación/i }));
+      const link = await screen.findByLabelText(/enlace de activación/i);
+      fireEvent.click(screen.getByRole('button', { name: /copiar enlace/i }));
+
+      expect(link).toBeVisible();
+      expect(link).toHaveValue(`${window.location.origin}/activar?token=one-time-token`);
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+      else delete (navigator as { clipboard?: Clipboard }).clipboard;
+    }
+  });
+
   it('navigates platform management and deactivates a store logically', async () => {
     const api = makeApi({ id: 'admin-1', displayName: 'Admin Plataforma', platformRole: 'PLATFORM_ADMIN', storeAccesses: [] });
     api.listStores.mockResolvedValue([{ id: 'store-1', name: 'Comercial Demo', active: true }]);

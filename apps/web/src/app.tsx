@@ -420,7 +420,8 @@ function PlatformWorkspace({ api, profile, activeSection }: { api: ApiClient; pr
   const [storeName, setStoreName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteStoreId, setInviteStoreId] = useState('');
-  const [oneTimeToken, setOneTimeToken] = useState('');
+  const [activationLink, setActivationLink] = useState('');
+  const [copyNotice, setCopyNotice] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -467,11 +468,24 @@ function PlatformWorkspace({ api, profile, activeSection }: { api: ApiClient; pr
         storeRole: 'STORE_ADMIN',
         expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
       });
-      setOneTimeToken(invitation.token);
+      setActivationLink(
+        `${window.location.origin}/activar?token=${encodeURIComponent(invitation.token)}`,
+      );
+      setCopyNotice('');
       setInviteEmail('');
       setError('');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'No fue posible crear la invitación.');
+    }
+  }
+
+  async function copyActivationLink() {
+    if (!navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(activationLink);
+      setCopyNotice('Enlace copiado.');
+    } catch {
+      setCopyNotice('');
     }
   }
 
@@ -530,7 +544,21 @@ function PlatformWorkspace({ api, profile, activeSection }: { api: ApiClient; pr
           <input id="invite-email" type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} />
           <button className="primary-button" type="submit">Crear invitación</button>
         </form>
-        {oneTimeToken && <Alert severity="success">Token de un solo uso: {oneTimeToken}</Alert>}
+        {activationLink && (
+          <div className="invitation-link">
+            <label htmlFor="activation-link">Enlace de activación</label>
+            <div>
+              <input id="activation-link" readOnly value={activationLink} />
+              <button className="secondary-button" type="button" onClick={() => void copyActivationLink()}>
+                Copiar enlace
+              </button>
+            </div>
+            <p className="field-help">
+              Este enlace se muestra una sola vez. Entrégalo únicamente a la persona invitada.
+              {copyNotice && <> {copyNotice}</>}
+            </p>
+          </div>
+        )}
         {!showStores && error && <Alert severity="error">{error}</Alert>}
       </section>}
       {activeSection === 'Auditoría' && <section className="paper-section"><p className="folio">TRAZABILIDAD</p><h2>Eventos de auditoría</h2>{events.length === 0 ? <p className="empty-state">No hay eventos registrados.</p> : <div className="table-wrapper"><table aria-label="Eventos de auditoría"><thead><tr><th>Evento</th><th>Fecha</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{event.event}</td><td>{commercialInstantInLima(event.createdAt)}</td></tr>)}</tbody></table></div>}</section>}

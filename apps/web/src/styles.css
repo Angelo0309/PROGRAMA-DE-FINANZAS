@@ -219,6 +219,9 @@ input:focus, select:focus, textarea:focus { outline: 3px solid rgba(59, 194, 114
 .inline-form input, .inline-form select { grid-row: 2; }
 .inline-form .primary-button { grid-row: 2; margin: 0; }
 .invitation-section { margin-top: 22px; }
+.invitation-link { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: 7px; background: #0a1725; }
+.invitation-link > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+.invitation-link label, .invitation-link p { margin: 0; }
 .section-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 26px; }
 .two-column-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 table { width: 100%; border-collapse: collapse; }
