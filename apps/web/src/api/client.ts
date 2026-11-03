@@ -157,6 +157,12 @@ export interface PurchaseView {
 }
 
 export interface ApiClient {
+  activate(input: {
+    token: string;
+    username: string;
+    displayName: string;
+    password: string;
+  }): Promise<TokenPair>;
   login(input: { identifier: string; password: string }): Promise<TokenPair>;
   getProfile(): Promise<Profile>;
   listStores(): Promise<Array<{ id: string; name: string; active: boolean }>>;
@@ -248,6 +254,13 @@ class HttpApiClient implements ApiClient {
     }
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
+  }
+
+  activate(input: Parameters<ApiClient['activate']>[0]) {
+    return this.request<TokenPair>('/auth/activate', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
   }
 
   login(input: { identifier: string; password: string }) {

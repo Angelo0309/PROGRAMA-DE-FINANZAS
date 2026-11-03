@@ -34,6 +34,17 @@ const loginSchema = z.object({
   identifier: z.string().trim().min(1, 'Ingrese su correo o usuario.'),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres.'),
 });
+const activationSchema = z
+  .object({
+    displayName: z.string().trim().min(2, 'Ingrese su nombre completo.'),
+    username: z.string().trim().min(3, 'El nombre de usuario debe tener al menos 3 caracteres.').max(80),
+    password: z.string().min(12, 'La contraseña debe tener al menos 12 caracteres.').max(128),
+    passwordConfirmation: z.string(),
+  })
+  .refine((value) => value.password === value.passwordConfirmation, {
+    message: 'Las contraseñas no coinciden.',
+    path: ['passwordConfirmation'],
+  });
 const productFormSchema = z.object({
   sku: z.string().trim().min(1, 'Ingrese el código del producto.'),
   name: z.string().trim().min(2, 'Ingrese un nombre de al menos 2 caracteres.'),
@@ -198,6 +209,121 @@ function LoginPanel({
         <p className="help-copy">
           El acceso y las funciones disponibles dependen del rol asignado.
         </p>
+      </section>
+      <p className="login-footer">© 2026 CrediCuenta · Sistema de administración de créditos</p>
+    </main>
+  );
+}
+
+function ActivationPanel({
+  api,
+  token,
+  onAuthenticated,
+}: {
+  api: ApiClient;
+  token: string | null;
+  onAuthenticated: (profile: Profile) => void;
+}) {
+  const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const inFlight = useRef(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!token || inFlight.current) return;
+    const parsed = activationSchema.safeParse({
+      displayName,
+      username,
+      password,
+      passwordConfirmation,
+    });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Revise los datos ingresados.');
+      return;
+    }
+
+    inFlight.current = true;
+    setSubmitting(true);
+    setError('');
+    try {
+      const tokens = await api.activate({
+        token,
+        username: parsed.data.username,
+        displayName: parsed.data.displayName,
+        password: parsed.data.password,
+      });
+      localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
+      localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+      onAuthenticated(await api.getProfile());
+    } catch (reason) {
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      setPassword('');
+      setPasswordConfirmation('');
+      setError(reason instanceof Error ? reason.message : 'No fue posible activar la invitación.');
+    } finally {
+      inFlight.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="login-shell">
+      <section className="login-panel" aria-labelledby="product-title">
+        <div className="login-brand">
+          <span className="brand-symbol" aria-hidden="true">CC</span>
+          <h1 id="product-title">CrediCuenta</h1>
+        </div>
+        <p className="login-subtitle">Administración de cuentas corrientes y créditos</p>
+        <div className="login-divider" />
+        <h2>Activa tu acceso</h2>
+        <p className="muted">Define tus datos para ingresar con el rol asignado.</p>
+        {!token && (
+          <Alert severity="warning">
+            Este enlace no contiene un token válido. Solicita una invitación nueva.
+          </Alert>
+        )}
+        <form onSubmit={submit} noValidate>
+          <label htmlFor="activation-display-name">Nombre completo</label>
+          <input
+            id="activation-display-name"
+            autoComplete="name"
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+          />
+          <label htmlFor="activation-username">Nombre de usuario</label>
+          <input
+            id="activation-username"
+            autoComplete="username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+          />
+          <label htmlFor="activation-password">Contraseña</label>
+          <input
+            id="activation-password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <label htmlFor="activation-password-confirmation">Confirma tu contraseña</label>
+          <input
+            id="activation-password-confirmation"
+            type="password"
+            autoComplete="new-password"
+            value={passwordConfirmation}
+            onChange={(event) => setPasswordConfirmation(event.target.value)}
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+          <button className="primary-button" disabled={!token || submitting} type="submit">
+            {submitting ? 'Activando…' : 'Activar acceso'}
+          </button>
+        </form>
+        <p className="help-copy">La invitación es personal y solo puede utilizarse una vez.</p>
       </section>
       <p className="login-footer">© 2026 CrediCuenta · Sistema de administración de créditos</p>
     </main>
@@ -1761,8 +1887,14 @@ function ClientArea({ api, profile, onLogout }: { api: ApiClient; profile: Profi
 }
 
 export function App({ api = defaultApi }: { api?: ApiClient }) {
+  const isActivation = window.location.pathname === '/activar';
+  const activationToken = isActivation
+    ? new URLSearchParams(window.location.search).get('token')
+    : null;
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [restoring, setRestoring] = useState(Boolean(localStorage.getItem(ACCESS_TOKEN_KEY)));
+  const [restoring, setRestoring] = useState(
+    !isActivation && Boolean(localStorage.getItem(ACCESS_TOKEN_KEY)),
+  );
 
   useEffect(() => {
     if (!restoring) return;
@@ -1785,7 +1917,11 @@ export function App({ api = defaultApi }: { api?: ApiClient }) {
   if (restoring) {
     return <main className="loading-screen"><CircularProgress /><p>Abriendo el libro de cuentas…</p></main>;
   }
-  if (!profile) return <LoginPanel api={api} onAuthenticated={setProfile} />;
+  if (!profile) {
+    return isActivation
+      ? <ActivationPanel api={api} token={activationToken} onAuthenticated={setProfile} />
+      : <LoginPanel api={api} onAuthenticated={setProfile} />;
+  }
 
   if (profile.platformRole === 'PLATFORM_ADMIN') {
     return <PlatformArea api={api} profile={profile} onLogout={logout} />;

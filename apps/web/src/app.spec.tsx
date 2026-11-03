@@ -6,6 +6,7 @@ import { App, localDateInTimeZone } from './app';
 function makeApi(profile: unknown) {
   return {
     login: vi.fn().mockResolvedValue({ accessToken: 'access-token', refreshToken: 'refresh-token', tokenType: 'Bearer', expiresIn: 900 }),
+    activate: vi.fn().mockResolvedValue({ accessToken: 'activated-access-token', refreshToken: 'activated-refresh-token', tokenType: 'Bearer', expiresIn: 900 }),
     getProfile: vi.fn().mockResolvedValue(profile),
     listStores: vi.fn().mockResolvedValue([]),
     listAudit: vi.fn().mockResolvedValue([]),
@@ -145,7 +146,10 @@ describe('local commercial dates', () => {
 });
 
 describe('App por roles', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    window.history.replaceState({}, '', '/');
+  });
   afterEach(cleanup);
 
   it('presents a validated sign-in entry point', () => {
@@ -153,6 +157,99 @@ describe('App por roles', () => {
     expect(screen.getByRole('heading', { name: 'CrediCuenta' })).toBeVisible();
     expect(screen.getByLabelText(/correo o usuario/i)).toBeVisible();
     expect(screen.getByRole('button', { name: /iniciar sesión/i })).toBeVisible();
+  });
+
+  it('shows guidance when an activation link has no token', () => {
+    window.history.replaceState({}, '', '/activar');
+    const api = makeApi({});
+
+    render(<App api={api as never} />);
+
+    expect(screen.getByRole('heading', { name: /activa tu acceso/i })).toBeVisible();
+    expect(screen.getByText(/solicita una invitación nueva/i)).toBeVisible();
+    expect(screen.getByRole('button', { name: /activar acceso/i })).toBeDisabled();
+    expect(api.activate).not.toHaveBeenCalled();
+  });
+
+  it('validates activation passwords before calling the API', () => {
+    window.history.replaceState({}, '', '/activar?token=invitation-token-with-enough-entropy');
+    const api = makeApi({});
+    render(<App api={api as never} />);
+
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Torres' } });
+    fireEvent.change(screen.getByLabelText(/nombre de usuario/i), { target: { value: 'ana.torres' } });
+    fireEvent.change(screen.getByLabelText(/^contraseña$/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.change(screen.getByLabelText(/confirma tu contraseña/i), { target: { value: 'OtraClave#2026' } });
+    fireEvent.click(screen.getByRole('button', { name: /activar acceso/i }));
+
+    expect(screen.getByText(/contraseñas no coinciden/i)).toBeVisible();
+    expect(api.activate).not.toHaveBeenCalled();
+  });
+
+  it('activates an invitation once and routes the assigned business administrator', async () => {
+    window.history.replaceState({}, '', '/activar?token=invitation-token-with-enough-entropy');
+    localStorage.setItem('credicuenta.accessToken', 'old-access-token');
+    localStorage.setItem('credicuenta.refreshToken', 'old-refresh-token');
+    const api = makeApi({
+      id: 'business-admin-2',
+      displayName: 'Ana Torres',
+      platformRole: 'USER',
+      storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }],
+    });
+    render(<App api={api as never} />);
+
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Torres' } });
+    fireEvent.change(screen.getByLabelText(/nombre de usuario/i), { target: { value: 'ana.torres' } });
+    fireEvent.change(screen.getByLabelText(/^contraseña$/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.change(screen.getByLabelText(/confirma tu contraseña/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.click(screen.getByRole('button', { name: /activar acceso/i }));
+
+    await waitFor(() => expect(api.activate).toHaveBeenCalledWith({
+      token: 'invitation-token-with-enough-entropy',
+      username: 'ana.torres',
+      displayName: 'Ana Torres',
+      password: 'ClaveSegura#2026',
+    }));
+    expect(localStorage.getItem('credicuenta.accessToken')).toBe('activated-access-token');
+    expect(localStorage.getItem('credicuenta.refreshToken')).toBe('activated-refresh-token');
+    expect(await screen.findByRole('heading', { name: /mesa de crédito/i })).toBeVisible();
+  });
+
+  it('keeps activation available after an API rejection without storing a session', async () => {
+    window.history.replaceState({}, '', '/activar?token=invitation-token-with-enough-entropy');
+    const api = makeApi({});
+    api.activate.mockRejectedValue(new Error('La invitación expiró o ya fue utilizada.'));
+    render(<App api={api as never} />);
+
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Torres' } });
+    fireEvent.change(screen.getByLabelText(/nombre de usuario/i), { target: { value: 'ana.torres' } });
+    fireEvent.change(screen.getByLabelText(/^contraseña$/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.change(screen.getByLabelText(/confirma tu contraseña/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.click(screen.getByRole('button', { name: /activar acceso/i }));
+
+    expect(await screen.findByText('La invitación expiró o ya fue utilizada.')).toBeVisible();
+    expect(screen.getByLabelText(/^contraseña$/i)).toHaveValue('');
+    expect(screen.getByLabelText(/confirma tu contraseña/i)).toHaveValue('');
+    expect(localStorage.getItem('credicuenta.accessToken')).toBeNull();
+    expect(localStorage.getItem('credicuenta.refreshToken')).toBeNull();
+  });
+
+  it('does not submit an activation twice while the first request is pending', async () => {
+    window.history.replaceState({}, '', '/activar?token=invitation-token-with-enough-entropy');
+    const api = makeApi({});
+    api.activate.mockReturnValue(new Promise(() => undefined));
+    render(<App api={api as never} />);
+
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Torres' } });
+    fireEvent.change(screen.getByLabelText(/nombre de usuario/i), { target: { value: 'ana.torres' } });
+    fireEvent.change(screen.getByLabelText(/^contraseña$/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.change(screen.getByLabelText(/confirma tu contraseña/i), { target: { value: 'ClaveSegura#2026' } });
+    const form = screen.getByRole('button', { name: /activar acceso/i }).closest('form');
+
+    fireEvent.submit(form!);
+    fireEvent.submit(form!);
+
+    await waitFor(() => expect(api.activate).toHaveBeenCalledTimes(1));
   });
 
   it('routes a platform administrator to store and audit management', async () => {
