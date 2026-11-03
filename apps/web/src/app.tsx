@@ -36,7 +36,11 @@ const loginSchema = z.object({
 });
 const activationSchema = z
   .object({
-    displayName: z.string().trim().min(2, 'Ingrese su nombre completo.'),
+    displayName: z
+      .string()
+      .trim()
+      .min(2, 'Ingrese su nombre completo.')
+      .max(160, 'El nombre no puede superar 160 caracteres.'),
     username: z.string().trim().min(3, 'El nombre de usuario debe tener al menos 3 caracteres.').max(80),
     password: z.string().min(12, 'La contraseña debe tener al menos 12 caracteres.').max(128),
     passwordConfirmation: z.string(),
@@ -249,6 +253,7 @@ function ActivationPanel({
     inFlight.current = true;
     setSubmitting(true);
     setError('');
+    let activationCompleted = false;
     try {
       const tokens = await api.activate({
         token,
@@ -258,13 +263,23 @@ function ActivationPanel({
       });
       localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
       localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+      activationCompleted = true;
+      window.history.replaceState({}, '', '/');
       onAuthenticated(await api.getProfile());
     } catch (reason) {
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      if (!activationCompleted) {
+        localStorage.removeItem(ACCESS_TOKEN_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
+      }
       setPassword('');
       setPasswordConfirmation('');
-      setError(reason instanceof Error ? reason.message : 'No fue posible activar la invitación.');
+      setError(
+        activationCompleted
+          ? 'Tu acceso se activó, pero no pudimos abrir la sesión. Recarga la página para continuar.'
+          : reason instanceof Error
+            ? reason.message
+            : 'No fue posible activar la invitación.',
+      );
     } finally {
       inFlight.current = false;
       setSubmitting(false);

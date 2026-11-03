@@ -186,6 +186,21 @@ describe('App por roles', () => {
     expect(api.activate).not.toHaveBeenCalled();
   });
 
+  it('rejects activation names longer than the API accepts', () => {
+    window.history.replaceState({}, '', '/activar?token=invitation-token-with-enough-entropy');
+    const api = makeApi({});
+    render(<App api={api as never} />);
+
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'A'.repeat(161) } });
+    fireEvent.change(screen.getByLabelText(/nombre de usuario/i), { target: { value: 'ana.torres' } });
+    fireEvent.change(screen.getByLabelText(/^contraseña$/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.change(screen.getByLabelText(/confirma tu contraseña/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.click(screen.getByRole('button', { name: /activar acceso/i }));
+
+    expect(screen.getByText(/nombre no puede superar 160 caracteres/i)).toBeVisible();
+    expect(api.activate).not.toHaveBeenCalled();
+  });
+
   it('activates an invitation once and routes the assigned business administrator', async () => {
     window.history.replaceState({}, '', '/activar?token=invitation-token-with-enough-entropy');
     localStorage.setItem('credicuenta.accessToken', 'old-access-token');
@@ -213,6 +228,8 @@ describe('App por roles', () => {
     expect(localStorage.getItem('credicuenta.accessToken')).toBe('activated-access-token');
     expect(localStorage.getItem('credicuenta.refreshToken')).toBe('activated-refresh-token');
     expect(await screen.findByRole('heading', { name: /mesa de crédito/i })).toBeVisible();
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('');
   });
 
   it('keeps activation available after an API rejection without storing a session', async () => {
@@ -232,6 +249,25 @@ describe('App por roles', () => {
     expect(screen.getByLabelText(/confirma tu contraseña/i)).toHaveValue('');
     expect(localStorage.getItem('credicuenta.accessToken')).toBeNull();
     expect(localStorage.getItem('credicuenta.refreshToken')).toBeNull();
+  });
+
+  it('keeps the activated session when loading the profile fails', async () => {
+    window.history.replaceState({}, '', '/activar?token=invitation-token-with-enough-entropy');
+    const api = makeApi({});
+    api.getProfile.mockRejectedValue(new Error('No fue posible cargar el perfil.'));
+    render(<App api={api as never} />);
+
+    fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Torres' } });
+    fireEvent.change(screen.getByLabelText(/nombre de usuario/i), { target: { value: 'ana.torres' } });
+    fireEvent.change(screen.getByLabelText(/^contraseña$/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.change(screen.getByLabelText(/confirma tu contraseña/i), { target: { value: 'ClaveSegura#2026' } });
+    fireEvent.click(screen.getByRole('button', { name: /activar acceso/i }));
+
+    expect(await screen.findByText(/acceso se activó.*recarga la página/i)).toBeVisible();
+    expect(localStorage.getItem('credicuenta.accessToken')).toBe('activated-access-token');
+    expect(localStorage.getItem('credicuenta.refreshToken')).toBe('activated-refresh-token');
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('');
   });
 
   it('does not submit an activation twice while the first request is pending', async () => {
