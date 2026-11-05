@@ -1,4 +1,5 @@
 import { JwtService } from '@nestjs/jwt';
+import { setTimeout as delay } from 'node:timers/promises';
 import { Decimal } from 'decimal.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -325,6 +326,21 @@ integration('MariaDB integration', () => {
       amount: new Decimal(obligation.amountDue).toFixed(2),
     });
   }, 15_000);
+
+  it('keeps a financial transaction alive beyond the Prisma default timeout', async () => {
+    const store = await prisma.store.findUniqueOrThrow({ where: { taxId: '20123456789' } });
+    const account = await prisma.creditAccount.findUniqueOrThrow({
+      where: { storeId_accountNumber: { storeId: store.id, accountNumber: 'CC-000001' } },
+    });
+    const repository = new PrismaCreditOperationsRepository(prisma);
+
+    await expect(
+      repository.withLockedAccount(account.id, async () => {
+        await delay(5_250);
+        return 'completed';
+      }),
+    ).resolves.toBe('completed');
+  }, 10_000);
 });
 import { randomUUID } from 'node:crypto';
 

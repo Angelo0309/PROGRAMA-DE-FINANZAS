@@ -481,7 +481,7 @@ export class PrismaCreditOperationsRepository
           await transaction.$queryRaw`SELECT id FROM CUENTA_CREDITO WHERE id = ${accountId} FOR UPDATE`;
           return operation(new PrismaCreditOperationsTransaction(transaction));
         },
-        { isolationLevel: 'Serializable' },
+        { isolationLevel: 'Serializable', timeout: 15_000 },
       );
     } catch (error) {
       const candidate = error as { code?: string; message?: string };
