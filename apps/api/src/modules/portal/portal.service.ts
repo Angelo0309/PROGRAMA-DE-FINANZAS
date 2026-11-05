@@ -236,13 +236,23 @@ export class PortalService {
   async getMySchedule(userId: string) {
     const obligations = await this.prisma.obligation.findMany({
       where: { credit: { account: { customer: { userId } } } },
-      include: { credit: { select: { accountId: true, purchaseId: true, currency: true } } },
+      include: {
+        credit: {
+          select: {
+            accountId: true,
+            purchaseId: true,
+            currency: true,
+            purchase: { select: { purchasedAt: true } },
+          },
+        },
+      },
       orderBy: [{ dueDate: 'asc' }, { installmentNumber: 'asc' }],
     });
     return obligations.map((obligation) => ({
       id: obligation.id,
       accountId: obligation.credit.accountId,
       purchaseId: obligation.credit.purchaseId,
+      purchasedAt: obligation.credit.purchase.purchasedAt.toISOString(),
       installmentNumber: obligation.installmentNumber,
       dueDate: obligation.dueDate.toISOString().slice(0, 10),
       currency: obligation.credit.currency,

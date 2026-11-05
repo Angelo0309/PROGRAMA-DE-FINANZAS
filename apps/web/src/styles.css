@@ -380,13 +380,15 @@ td { color: #d9e2eb; font-size: .76rem; }
 .form-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .form-pair label { display: grid; gap: 7px; }
-.schedule-selector { display: grid; grid-template-columns: minmax(240px, 520px); gap: 7px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.schedule-selector { display: grid; grid-template-columns: repeat(2, minmax(240px, 520px)); gap: 14px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.schedule-selector > div { display: grid; gap: 7px; }
 .schedule-selector label { margin: 0; }
 .schedule-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 0; }
 .schedule-metrics article { min-height: 98px; }
 .schedule-metrics article span { margin-bottom: 14px; }
 .schedule-metrics article strong { font-size: clamp(1rem, 2vw, 1.5rem); }
 .schedule-panel { min-width: 0; }
+.schedule-plan-title { margin: 5px 0 0; color: var(--cyan); font-size: .67rem; }
 .schedule-table { min-width: 990px; }
 .schedule-table th, .schedule-table td { padding: 12px 9px; font-size: .69rem; white-space: nowrap; }
 .schedule-empty { margin: 0; padding: 42px 20px; text-align: center; }
@@ -431,6 +433,7 @@ td { color: #d9e2eb; font-size: .76rem; }
   .purchase-main-grid { grid-template-columns: 1fr; }
   .account-layout.form-open { grid-template-columns: 1fr; }
   .condition-grid { grid-template-columns: 1fr 1fr; }
+  .schedule-selector { grid-template-columns: 1fr; }
   .schedule-metrics { grid-template-columns: 1fr 1fr; }
   .payment-layout { grid-template-columns: 1fr; }
   .statement-metrics { grid-template-columns: 1fr 1fr; }

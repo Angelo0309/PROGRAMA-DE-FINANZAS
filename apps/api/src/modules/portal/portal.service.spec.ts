@@ -141,16 +141,32 @@ describe('PortalService logical deactivation', () => {
       openingBalance: decimal('1000'), principalDue: decimal('250'),
       compensatoryInterest: decimal('35.25'), lateInterest: decimal('0'),
       amountDue: decimal('285.25'), paidAmount: decimal('0'), status: 'PENDING',
-      credit: { accountId: 'account-1', purchaseId: 'purchase-1', currency: 'PEN' },
+      credit: {
+        accountId: 'account-1',
+        purchaseId: 'purchase-1',
+        currency: 'PEN',
+        purchase: { purchasedAt: new Date('2026-10-20T15:00:00.000Z') },
+      },
     }]);
     const service = new PortalService({ obligation: { findMany } } as unknown as PrismaService);
 
     await expect(service.getMySchedule('client-user-1')).resolves.toEqual([expect.objectContaining({
-      id: 'obligation-1', accountId: 'account-1', purchaseId: 'purchase-1', currency: 'PEN',
+      id: 'obligation-1', accountId: 'account-1', purchaseId: 'purchase-1',
+      purchasedAt: '2026-10-20T15:00:00.000Z', currency: 'PEN',
       dueDate: '2026-12-15', amountDue: '285.25', paidAmount: '0.00', status: 'PENDING',
     })]);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { credit: { account: { customer: { userId: 'client-user-1' } } } },
+      include: {
+        credit: {
+          select: {
+            accountId: true,
+            purchaseId: true,
+            currency: true,
+            purchase: { select: { purchasedAt: true } },
+          },
+        },
+      },
     }));
   });
 

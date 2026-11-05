@@ -47,6 +47,7 @@ export interface CreditConditionInput {
 export interface ScheduleItemView {
   id: string;
   purchaseId: string;
+  purchasedAt: string;
   installmentNumber: number;
   dueDate: string;
   openingBalance: string;

@@ -92,6 +92,9 @@ const commercialDate = (date: string) => {
   return `${day}/${month}/${year}`;
 };
 
+const purchasePlanLabel = (purchasedAt: string, purchaseId: string) =>
+  `Compra ${commercialDate(purchasedAt)} · ${purchaseId.slice(0, 8).toUpperCase()}`;
+
 export function localDateInTimeZone(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -1429,6 +1432,7 @@ function ConditionDetails({ condition }: { condition: CreditConditionView }) {
 
 function PaymentPlans({ api, access, accounts }: { api: ApiClient; access: StoreAccess; accounts: AccountView[] }) {
   const [accountId, setAccountId] = useState('');
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState('all');
   const [schedule, setSchedule] = useState<ScheduleItemView[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -1458,30 +1462,40 @@ function PaymentPlans({ api, access, accounts }: { api: ApiClient; access: Store
       });
   }, [access.storeId, accountId, api]);
 
-  const nextPending = schedule.find((item) => item.status === 'PENDING' || item.status === 'OVERDUE');
+  const plans = useMemo(() => {
+    const uniquePlans = new Map<string, { purchaseId: string; purchasedAt: string }>();
+    schedule.forEach((item) => uniquePlans.set(item.purchaseId, { purchaseId: item.purchaseId, purchasedAt: item.purchasedAt }));
+    return [...uniquePlans.values()].sort((first, second) =>
+      second.purchasedAt.localeCompare(first.purchasedAt) || first.purchaseId.localeCompare(second.purchaseId));
+  }, [schedule]);
+  const selectedPlan = plans.find((plan) => plan.purchaseId === selectedPurchaseId);
+  const visibleSchedule = selectedPurchaseId === 'all'
+    ? schedule
+    : schedule.filter((item) => item.purchaseId === selectedPurchaseId);
+  const nextPending = visibleSchedule.find((item) => item.status === 'PENDING' || item.status === 'OVERDUE');
 
   return (
     <section className="schedule-page">
       <div className="page-lead"><p>Consulta el plan francés y las obligaciones calculadas por el motor financiero.</p></div>
       <section className="schedule-selector">
-        <label htmlFor="schedule-account">Cuenta del cliente</label>
-        <select id="schedule-account" value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Seleccione una cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.customerName} · {account.accountNumber}</option>)}</select>
+        <div><label htmlFor="schedule-account">Cuenta del cliente</label><select id="schedule-account" value={accountId} onChange={(event) => { setSelectedPurchaseId('all'); setAccountId(event.target.value); }}><option value="">Seleccione una cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.customerName} · {account.accountNumber}</option>)}</select></div>
+        {plans.length > 0 && <div><label htmlFor="schedule-plan">Plan de pago</label><select id="schedule-plan" value={selectedPurchaseId} onChange={(event) => setSelectedPurchaseId(event.target.value)}><option value="all">Todos los planes</option>{plans.map((plan) => <option key={plan.purchaseId} value={plan.purchaseId}>{purchasePlanLabel(plan.purchasedAt, plan.purchaseId)}</option>)}</select></div>}
       </section>
 
       {selectedAccount && (
         <section className="metric-strip schedule-metrics" aria-label="Resumen del plan de pago">
           <article><span>Límite de crédito</span><strong>{money(selectedAccount.currency, selectedAccount.creditLimit)}</strong></article>
           <article><span>Capital original pendiente</span><strong>{money(selectedAccount.currency, selectedAccount.originalOutstanding)}</strong></article>
-          <article><span>Obligaciones del plan</span><strong>{schedule.length}</strong></article>
+          <article><span>Obligaciones del plan</span><strong>{visibleSchedule.length}</strong></article>
           <article><span>Próximo vencimiento</span><strong className="store-name">{nextPending ? commercialDate(nextPending.dueDate) : 'Sin pendientes'}</strong></article>
         </section>
       )}
 
       {error && <Alert severity="error">{error}</Alert>}
       <section className="catalog-panel schedule-panel" aria-labelledby="schedule-title">
-        <div className="catalog-panel-heading"><div><p className="folio">CRONOGRAMA OFICIAL</p><h2 id="schedule-title">Plan de pagos</h2></div><span>{loading ? 'Consultando…' : `${schedule.length} obligaciones`}</span></div>
+        <div className="catalog-panel-heading"><div><p className="folio">CRONOGRAMA OFICIAL</p><h2 id="schedule-title">Plan de pagos</h2>{selectedPlan && <p className="schedule-plan-title">{purchasePlanLabel(selectedPlan.purchasedAt, selectedPlan.purchaseId)}</p>}</div><span>{loading ? 'Consultando…' : `${visibleSchedule.length} obligaciones`}</span></div>
         {!accountId ? <p className="empty-state schedule-empty">Seleccione una cuenta para consultar su cronograma.</p> : loading ? <div className="schedule-loading"><CircularProgress size={24} /><span>Consultando obligaciones…</span></div> : schedule.length === 0 ? <p className="empty-state schedule-empty">La cuenta no tiene obligaciones en cuotas.</p> : (
-          <div className="table-wrapper"><table className="schedule-table" aria-label="Cronograma de pagos"><thead><tr><th>Cuota</th><th>Vencimiento</th><th>Saldo inicial</th><th>Interés</th><th>Capital</th><th>Importe exigible</th><th>Pagado</th><th>Estado</th></tr></thead><tbody>{schedule.map((item) => { const status = obligationStatus(item.status); return <tr key={item.id}><td>{item.installmentNumber}</td><td>{commercialDate(item.dueDate)}</td><td>{money(item.currency, item.openingBalance)}</td><td>{money(item.currency, item.compensatoryInterest)}</td><td>{money(item.currency, item.principalDue)}</td><td className="money-cell">{money(item.currency, item.amountDue)}</td><td>{money(item.currency, item.paidAmount)}</td><td><span className={`status-pill ${status.tone}`}>{status.label}</span></td></tr>; })}</tbody></table></div>
+          <div className="table-wrapper"><table className="schedule-table" aria-label="Cronograma de pagos"><thead><tr>{selectedPurchaseId === 'all' && <th>Plan</th>}<th>Cuota</th><th>Vencimiento</th><th>Saldo inicial</th><th>Interés</th><th>Capital</th><th>Importe exigible</th><th>Pagado</th><th>Estado</th></tr></thead><tbody>{visibleSchedule.map((item) => { const status = obligationStatus(item.status); return <tr key={item.id}>{selectedPurchaseId === 'all' && <td>{purchasePlanLabel(item.purchasedAt, item.purchaseId)}</td>}<td>{item.installmentNumber}</td><td>{commercialDate(item.dueDate)}</td><td>{money(item.currency, item.openingBalance)}</td><td>{money(item.currency, item.compensatoryInterest)}</td><td>{money(item.currency, item.principalDue)}</td><td className="money-cell">{money(item.currency, item.amountDue)}</td><td>{money(item.currency, item.paidAmount)}</td><td><span className={`status-pill ${status.tone}`}>{status.label}</span></td></tr>; })}</tbody></table></div>
         )}
       </section>
       <p className="audit-note">Las cuotas, intereses y fechas provienen de la API. El frontend no reconstruye el plan financiero.</p>
