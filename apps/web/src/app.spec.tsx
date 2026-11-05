@@ -582,6 +582,41 @@ describe('App por roles', () => {
     expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('28/11/2026')).toBeVisible();
   });
 
+  it('filters one selected account schedule by purchase plan', async () => {
+    const firstPurchaseId = '11111111-1111-4111-8111-111111111111';
+    const secondPurchaseId = '22222222-2222-4222-8222-222222222222';
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    api.getSchedule.mockResolvedValue([
+      { id: 'first-plan-row-1', purchaseId: firstPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '200.00', principalDue: '95.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
+      { id: 'first-plan-row-2', purchaseId: firstPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 2, dueDate: '2026-12-28', openingBalance: '105.00', principalDue: '100.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '105.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
+      { id: 'second-plan-row', purchaseId: secondPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-10-28', openingBalance: '80.00', principalDue: '80.00', compensatoryInterest: '0.00', lateInterest: '0.00', amountDue: '80.00', paidAmount: '0.00', currency: 'PEN', status: 'VOIDED' },
+    ]);
+    render(<App api={api as never} />);
+    await login();
+    fireEvent.click(within(await screen.findByRole('navigation', { name: /secciones/i })).getByRole('button', { name: 'Planes de pago' }));
+    fireEvent.change(screen.getByLabelText(/cuenta del cliente/i), { target: { value: 'account-1' } });
+
+    const planSelector = await screen.findByRole('combobox', { name: 'Plan de pago' });
+    expect(within(planSelector).getByRole('option', { name: 'Todos los planes' })).toBeVisible();
+    expect(within(planSelector).getByRole('option', { name: 'Compra 20/10/2026 · 11111111' })).toBeVisible();
+    expect(within(planSelector).getByRole('option', { name: 'Compra 20/10/2026 · 22222222' })).toBeVisible();
+    let table = screen.getByRole('table', { name: /cronograma de pagos/i });
+    expect(within(table).getByRole('columnheader', { name: 'Plan' })).toBeVisible();
+    expect(within(table).getAllByText('Compra 20/10/2026 · 11111111')).toHaveLength(2);
+    expect(within(table).getByText('Compra 20/10/2026 · 22222222')).toBeVisible();
+
+    fireEvent.change(planSelector, { target: { value: firstPurchaseId } });
+    table = screen.getByRole('table', { name: /cronograma de pagos/i });
+    expect(within(table).queryByRole('columnheader', { name: 'Plan' })).not.toBeInTheDocument();
+    expect(within(table).queryByText('28/10/2026')).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('2')).toBeVisible();
+    expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('28/11/2026')).toBeVisible();
+
+    fireEvent.change(planSelector, { target: { value: secondPurchaseId } });
+    expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('1')).toBeVisible();
+    expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('Sin pendientes')).toBeVisible();
+  });
+
   it('clears an old schedule while a different account is loading', async () => {
     let finishSecond: ((value: unknown[]) => void) | undefined;
     const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
@@ -597,10 +632,12 @@ describe('App por roles', () => {
     const selector = screen.getByLabelText(/cuenta del cliente/i);
     fireEvent.change(selector, { target: { value: 'account-1' } });
     await waitFor(() => expect(screen.getAllByText('28/11/2026')).toHaveLength(2));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Plan de pago' }), { target: { value: 'purchase-1' } });
 
     fireEvent.change(selector, { target: { value: 'account-2' } });
     await waitFor(() => expect(screen.queryAllByText('28/11/2026')).toHaveLength(0));
-    finishSecond?.([]);
+    finishSecond?.([{ id: 'new-row', purchaseId: 'purchase-2', purchasedAt: '2026-11-01T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-12-28', openingBalance: '70.00', principalDue: '70.00', compensatoryInterest: '0.00', lateInterest: '0.00', amountDue: '70.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' }]);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Plan de pago' })).toHaveValue('all'));
   });
 
   it('registers the exact full payment quoted by the API and presents its receipt', async () => {
