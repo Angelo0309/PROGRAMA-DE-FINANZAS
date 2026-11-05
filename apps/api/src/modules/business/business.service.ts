@@ -364,12 +364,21 @@ export class BusinessService {
   async getSchedule(storeId: string, accountId: string) {
     const obligations = await this.prisma.obligation.findMany({
       where: { credit: { storeId, accountId } },
-      include: { credit: { select: { purchaseId: true, currency: true } } },
+      include: {
+        credit: {
+          select: {
+            purchaseId: true,
+            currency: true,
+            purchase: { select: { purchasedAt: true } },
+          },
+        },
+      },
       orderBy: [{ dueDate: 'asc' }, { installmentNumber: 'asc' }],
     });
     return obligations.map((item) => ({
       id: item.id,
       purchaseId: item.credit.purchaseId,
+      purchasedAt: item.credit.purchase.purchasedAt.toISOString(),
       installmentNumber: item.installmentNumber,
       dueDate: item.dueDate.toISOString().slice(0, 10),
       openingBalance: item.openingBalance.toFixed(2),

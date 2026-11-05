@@ -292,6 +292,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{accountId}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/accounts": {
         parameters: {
             query?: never;
@@ -435,6 +451,26 @@ export interface components {
             dueDate: string;
             currency: string;
             totalDue: components["schemas"]["DecimalString"];
+        };
+        ScheduleItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            purchaseId: string;
+            /** Format: date-time */
+            purchasedAt: string;
+            installmentNumber: number;
+            /** Format: date */
+            dueDate: string;
+            openingBalance: components["schemas"]["DecimalString"];
+            principalDue: components["schemas"]["DecimalString"];
+            compensatoryInterest: components["schemas"]["DecimalString"];
+            lateInterest: components["schemas"]["DecimalString"];
+            amountDue: components["schemas"]["DecimalString"];
+            paidAmount: components["schemas"]["DecimalString"];
+            currency: string;
+            /** @enum {string} */
+            status: "PENDING" | "OVERDUE" | "PAID" | "VOIDED";
         };
         PaymentQuote: {
             /** Format: uuid */
@@ -934,6 +970,30 @@ export interface operations {
             };
         };
     };
+    getSchedule: {
+        parameters: {
+            query: {
+                storeId: string;
+            };
+            header?: never;
+            path: {
+                accountId: components["parameters"]["accountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cronograma de obligaciones de la cuenta seleccionada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleItem"][];
+                };
+            };
+        };
+    };
     getMyAccounts: {
         parameters: {
             query?: never;
@@ -1002,7 +1062,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ScheduleItem"][];
+                };
             };
         };
     };

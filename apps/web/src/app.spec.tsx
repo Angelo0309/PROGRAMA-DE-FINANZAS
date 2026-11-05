@@ -100,10 +100,10 @@ function makeApi(profile: unknown) {
       validUntil: null,
     }),
     getSchedule: vi.fn().mockResolvedValue([
-      { id: 'obligation-voided', purchaseId: 'purchase-0', installmentNumber: 1, dueDate: '2026-09-28', openingBalance: '90.00', principalDue: '90.00', compensatoryInterest: '0.00', lateInterest: '0.00', amountDue: '90.00', paidAmount: '0.00', currency: 'PEN', status: 'VOIDED' },
-      { id: 'obligation-1', purchaseId: 'purchase-1', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '300.00', principalDue: '95.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
-      { id: 'obligation-2', purchaseId: 'purchase-1', installmentNumber: 2, dueDate: '2026-12-28', openingBalance: '205.00', principalDue: '98.00', compensatoryInterest: '2.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
-      { id: 'obligation-3', purchaseId: 'purchase-2', installmentNumber: 1, dueDate: '2026-10-28', openingBalance: '50.00', principalDue: '50.00', compensatoryInterest: '0.00', lateInterest: '1.00', amountDue: '51.00', paidAmount: '0.00', currency: 'PEN', status: 'OVERDUE' },
+      { id: 'obligation-voided', purchaseId: 'purchase-0', purchasedAt: '2026-09-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-09-28', openingBalance: '90.00', principalDue: '90.00', compensatoryInterest: '0.00', lateInterest: '0.00', amountDue: '90.00', paidAmount: '0.00', currency: 'PEN', status: 'VOIDED' },
+      { id: 'obligation-1', purchaseId: 'purchase-1', purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '300.00', principalDue: '95.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
+      { id: 'obligation-2', purchaseId: 'purchase-1', purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 2, dueDate: '2026-12-28', openingBalance: '205.00', principalDue: '98.00', compensatoryInterest: '2.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
+      { id: 'obligation-3', purchaseId: 'purchase-2', purchasedAt: '2026-09-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-10-28', openingBalance: '50.00', principalDue: '50.00', compensatoryInterest: '0.00', lateInterest: '1.00', amountDue: '51.00', paidAmount: '0.00', currency: 'PEN', status: 'OVERDUE' },
     ]),
     getPaymentQuote: vi.fn().mockResolvedValue({
       accountId: 'account-1',
@@ -588,7 +588,7 @@ describe('App por roles', () => {
     const accounts = await api.listAccounts();
     api.listAccounts.mockResolvedValue([...accounts, { ...accounts[0], id: 'account-2', accountNumber: 'CC-002', customerName: 'Ana Torres' }]);
     api.getSchedule.mockImplementation((accountId: string) => accountId === 'account-1'
-      ? Promise.resolve([{ id: 'old-row', purchaseId: 'purchase-1', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '100.00', principalDue: '95.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' }])
+      ? Promise.resolve([{ id: 'old-row', purchaseId: 'purchase-1', purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '100.00', principalDue: '95.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' }])
       : new Promise((resolve) => { finishSecond = resolve; }));
     render(<App api={api as never} />);
     await login();
@@ -708,7 +708,7 @@ describe('App por roles', () => {
   it('lets a client navigate through purchases, schedule and payment history', async () => {
     const api = makeApi({ id: 'client-1', displayName: 'Maria Demo', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'CLIENT' }] });
     api.getMyPurchases.mockResolvedValue([{ id: 'purchase-1', purchasedAt: '2026-10-20T15:00:00.000Z', total: '189.90', currency: 'PEN', items: [{ productId: 'product-1', description: 'Cafetera compacta', quantity: '1.0000', unitPrice: '189.9000', lineTotal: '189.90', imageUrl: 'https://images.example.com/cafetera.jpg' }] }]);
-    api.getMySchedule.mockResolvedValue([{ id: 'obligation-1', purchaseId: 'purchase-1', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '189.90', principalDue: '180.00', compensatoryInterest: '9.90', lateInterest: '0.00', amountDue: '189.90', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' }]);
+    api.getMySchedule.mockResolvedValue([{ id: 'obligation-1', purchaseId: 'purchase-1', purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '189.90', principalDue: '180.00', compensatoryInterest: '9.90', lateInterest: '0.00', amountDue: '189.90', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' }]);
     api.getMyPayments.mockResolvedValue([{ id: 'payment-1', accountId: 'account-1', paidAt: '2026-11-01T15:30:00.000Z', currency: 'PEN', amount: '100.00', method: 'BANK_TRANSFER', receiptNumber: 'REC-001', allocations: [] }]);
     render(<App api={api as never} />);
     await login();

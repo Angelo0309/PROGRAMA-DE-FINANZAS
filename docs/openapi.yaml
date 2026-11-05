@@ -240,6 +240,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaymentReceipt"
+  /accounts/{accountId}/schedule:
+    get:
+      operationId: getSchedule
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/accountId"
+        - name: storeId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Cronograma de obligaciones de la cuenta seleccionada
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ScheduleItem" }
   /me/accounts:
     get:
       operationId: getMyAccounts
@@ -263,7 +281,13 @@ paths:
       operationId: getMySchedule
       security: [{ bearerAuth: [] }]
       responses:
-        "200": { description: Cronograma de obligaciones del cliente }
+        "200":
+          description: Cronograma de obligaciones del cliente
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ScheduleItem" }
   /me/payments:
     get:
       operationId: getMyPayments
@@ -365,6 +389,25 @@ components:
         dueDate: { type: string, format: date }
         currency: { type: string, minLength: 3, maxLength: 3 }
         totalDue: { $ref: "#/components/schemas/DecimalString" }
+    ScheduleItem:
+      type: object
+      required: [id, purchaseId, purchasedAt, installmentNumber, dueDate, openingBalance, principalDue, compensatoryInterest, lateInterest, amountDue, paidAmount, currency, status]
+      properties:
+        id: { type: string, format: uuid }
+        purchaseId: { type: string, format: uuid }
+        purchasedAt: { type: string, format: date-time }
+        installmentNumber: { type: integer, minimum: 1 }
+        dueDate: { type: string, format: date }
+        openingBalance: { $ref: "#/components/schemas/DecimalString" }
+        principalDue: { $ref: "#/components/schemas/DecimalString" }
+        compensatoryInterest: { $ref: "#/components/schemas/DecimalString" }
+        lateInterest: { $ref: "#/components/schemas/DecimalString" }
+        amountDue: { $ref: "#/components/schemas/DecimalString" }
+        paidAmount: { $ref: "#/components/schemas/DecimalString" }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        status:
+          type: string
+          enum: [PENDING, OVERDUE, PAID, VOIDED]
     PaymentQuote:
       type: object
       required: [accountId, paidOn, currency, amount, obligations]

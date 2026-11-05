@@ -123,6 +123,53 @@ describe('BusinessService account conditions', () => {
   });
 });
 
+describe('BusinessService payment schedule', () => {
+  it('returns purchase metadata in the selected account schedule', async () => {
+    const decimal = (value: string) => ({
+      toFixed: (places: number) => Number(value).toFixed(places),
+    });
+    const findMany = vi.fn().mockResolvedValue([{
+      id: 'obligation-1',
+      installmentNumber: 1,
+      dueDate: new Date('2026-11-28T00:00:00.000Z'),
+      openingBalance: decimal('100'),
+      principalDue: decimal('95'),
+      compensatoryInterest: decimal('5'),
+      lateInterest: decimal('0'),
+      amountDue: decimal('100'),
+      paidAmount: decimal('0'),
+      status: 'PENDING',
+      credit: {
+        purchaseId: 'purchase-1',
+        currency: 'PEN',
+        purchase: { purchasedAt: new Date('2026-10-20T15:00:00.000Z') },
+      },
+    }]);
+    const service = new BusinessService({
+      obligation: { findMany },
+    } as unknown as PrismaService);
+
+    await expect(service.getSchedule('store-1', 'account-1')).resolves.toEqual([
+      expect.objectContaining({
+        purchaseId: 'purchase-1',
+        purchasedAt: '2026-10-20T15:00:00.000Z',
+      }),
+    ]);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { credit: { storeId: 'store-1', accountId: 'account-1' } },
+      include: {
+        credit: {
+          select: {
+            purchaseId: true,
+            currency: true,
+            purchase: { select: { purchasedAt: true } },
+          },
+        },
+      },
+    }));
+  });
+});
+
 describe('BusinessService payment quote', () => {
   it('calculates the complete payable amount for the selected Lima payment date', async () => {
     const prisma = {
