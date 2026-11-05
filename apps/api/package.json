@@ -1,0 +1,51 @@
+{
+  "name": "@credicuenta/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "dev": "node --watch --import tsx src/main.ts",
+    "lint": "oxlint src test",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "start": "node dist/main.js",
+    "start:prod": "prisma migrate deploy && node dist/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.3.2",
+    "@nestjs/config": "12.0.1",
+    "@nestjs/core": "12.3.2",
+    "@nestjs/jwt": "12.0.3",
+    "@nestjs/platform-express": "12.3.2",
+    "@nestjs/schedule": "12.0.2",
+    "@nestjs/swagger": "12.0.5",
+    "@node-rs/argon2": "2.2.2",
+    "@prisma/adapter-mariadb": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "decimal.js": "10.6.0",
+    "dotenv": "18.0.3",
+    "luxon": "3.7.2",
+    "mariadb": "3.5.4",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "12.3.2",
+    "@types/luxon": "^3.7.0",
+    "@types/node": "26.6.6",
+    "@types/supertest": "^6.0.3",
+    "oxlint": "latest",
+    "prettier": "3.9.10",
+    "prisma": "7.10.1",
+    "supertest": "latest",
+    "tsx": "latest",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}
+

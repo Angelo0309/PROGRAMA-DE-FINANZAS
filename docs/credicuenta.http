@@ -1,0 +1,116 @@
+@baseUrl = http://localhost:3000/api/v1
+
+### Salud del proceso
+GET {{baseUrl}}/health/live
+
+### Salud de la base
+GET {{baseUrl}}/health/ready
+
+### @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "negocio@credicuenta.test",
+  "password": "DemoSegura#2026"
+}
+
+### REST Client reutiliza automaticamente el token y los IDs de las respuestas.
+@accessToken = {{login.response.body.$.accessToken}}
+@storeId = 10000000-0000-4000-8000-000000000001
+
+### Perfil y roles
+GET {{baseUrl}}/me/profile
+Authorization: Bearer {{accessToken}}
+
+### @name products
+### Productos de la tienda ficticia
+GET {{baseUrl}}/stores/{{storeId}}/products
+Authorization: Bearer {{accessToken}}
+
+@productId = {{products.response.body.$[0].id}}
+
+### @name accounts
+### Cuentas de la tienda ficticia
+GET {{baseUrl}}/stores/{{storeId}}/accounts
+Authorization: Bearer {{accessToken}}
+
+@accountId = {{accounts.response.body.$[0].id}}
+
+### @name purchase
+### Registrar una compra de demostracion
+POST {{baseUrl}}/stores/{{storeId}}/purchases
+Authorization: Bearer {{accessToken}}
+Idempotency-Key: demo-purchase-{{$guid}}
+Content-Type: application/json
+
+{
+  "accountId": "{{accountId}}",
+  "purchasedAt": "2026-10-20T10:00:00-05:00",
+  "currency": "PEN",
+  "mode": "END_OF_MONTH",
+  "items": [
+    { "productId": "{{productId}}", "quantity": "1" }
+  ]
+}
+
+### @name cut
+### Crear el corte asignado a la compra
+POST {{baseUrl}}/accounts/{{accountId}}/cuts
+Authorization: Bearer {{accessToken}}
+Idempotency-Key: demo-cut-{{$guid}}
+Content-Type: application/json
+
+{
+  "storeId": "{{storeId}}",
+  "cutAt": "{{purchase.response.body.$.assignedCutAt}}"
+}
+
+### @name paymentQuote
+### Consultar el importe completo exigible para la fecha del pago
+GET {{baseUrl}}/accounts/{{accountId}}/payment-quote?storeId={{storeId}}&paidAt={{purchase.response.body.$.obligations[0].dueDate}}T12:00:00-05:00
+Authorization: Bearer {{accessToken}}
+
+### @name payment
+### Pagar exactamente el importe oficial cotizado
+POST {{baseUrl}}/accounts/{{accountId}}/payments
+Authorization: Bearer {{accessToken}}
+Idempotency-Key: demo-payment-{{$guid}}
+Content-Type: application/json
+
+{
+  "storeId": "{{storeId}}",
+  "paidAt": "{{purchase.response.body.$.obligations[0].dueDate}}T12:00:00-05:00",
+  "currency": "PEN",
+  "amount": "{{paymentQuote.response.body.$.amount}}"
+}
+
+### Ver el comprobante del pago
+GET {{baseUrl}}/payments/{{payment.response.body.$.id}}/receipt?storeId={{storeId}}
+Authorization: Bearer {{accessToken}}
+
+### Ver el cronograma de la cuenta
+GET {{baseUrl}}/accounts/{{accountId}}/schedule?storeId={{storeId}}
+Authorization: Bearer {{accessToken}}
+
+### Ver los estados de cuenta
+GET {{baseUrl}}/accounts/{{accountId}}/statements?storeId={{storeId}}
+Authorization: Bearer {{accessToken}}
+
+### @name clientLogin
+### Entrar como el cliente ficticio
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "cliente@credicuenta.test",
+  "password": "DemoSegura#2026"
+}
+
+### Consultar las cuentas desde el portal del cliente
+GET {{baseUrl}}/me/accounts
+Authorization: Bearer {{clientLogin.response.body.$.accessToken}}
+
+### Consultar las compras desde el portal del cliente
+GET {{baseUrl}}/me/purchases
+Authorization: Bearer {{clientLogin.response.body.$.accessToken}}

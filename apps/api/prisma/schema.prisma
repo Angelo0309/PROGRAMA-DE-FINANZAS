@@ -1,0 +1,437 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum PlatformRole {
+  PLATFORM_ADMIN
+  USER
+}
+
+enum StoreRole {
+  STORE_ADMIN
+  OPERATOR
+  CLIENT
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum RateKind {
+  EFFECTIVE_ANNUAL
+  NOMINAL_ANNUAL
+}
+
+enum PurchaseMode {
+  END_OF_MONTH
+  INSTALLMENTS
+}
+
+enum PurchaseStatus {
+  ACTIVE
+  VOIDED
+}
+
+enum CreditStatus {
+  ACTIVE
+  PAID
+  OVERDUE
+  VOIDED
+}
+
+enum ObligationStatus {
+  PENDING
+  PAID
+  OVERDUE
+  VOIDED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+model Store {
+  id               String            @id @default(uuid()) @db.Char(36)
+  taxId            String            @unique @map("numero_documento") @db.VarChar(20)
+  name             String            @map("razon_social") @db.VarChar(160)
+  tradeName        String?           @map("nombre_comercial") @db.VarChar(160)
+  currency         String            @default("PEN") @db.Char(3)
+  timeZone         String            @default("America/Lima") @map("zona_horaria") @db.VarChar(64)
+  active           Boolean           @default(true) @map("activo")
+  createdAt        DateTime          @default(now()) @map("creado_en") @db.DateTime(3)
+  updatedAt        DateTime          @updatedAt @map("actualizado_en") @db.DateTime(3)
+  accesses         StoreAccess[]
+  customers        Customer[]
+  accounts         CreditAccount[]
+  conditions       CreditCondition[]
+  products         ProductService[]
+  purchases        Purchase[]
+  cuts             Cut[]
+  payments         Payment[]
+  invitations      UserInvitation[]
+  audits           AuditEvent[]
+
+  @@map("TIENDA")
+}
+
+model User {
+  id               String            @id @default(uuid()) @db.Char(36)
+  username         String            @unique @map("nombre_usuario") @db.VarChar(80)
+  email            String            @unique @map("correo") @db.VarChar(254)
+  passwordHash     String            @map("clave_hash") @db.VarChar(255)
+  displayName      String            @map("nombre_mostrar") @db.VarChar(160)
+  platformRole     PlatformRole      @default(USER) @map("rol_plataforma")
+  emailVerifiedAt  DateTime?         @map("correo_verificado_en") @db.DateTime(3)
+  lastAccessAt     DateTime?         @map("ultimo_acceso_en") @db.DateTime(3)
+  active           Boolean           @default(true) @map("activo")
+  createdAt        DateTime          @default(now()) @map("creado_en") @db.DateTime(3)
+  updatedAt        DateTime          @updatedAt @map("actualizado_en") @db.DateTime(3)
+  accesses         StoreAccess[]
+  customerProfiles Customer[]
+  invitationsSent  UserInvitation[]  @relation("InvitationIssuer")
+  refreshSessions  RefreshSession[]
+  audits           AuditEvent[]
+  purchases        Purchase[]        @relation("PurchaseOperator")
+  payments         Payment[]         @relation("PaymentOperator")
+
+  @@map("USUARIO")
+}
+
+model Customer {
+  id             String          @default(uuid()) @db.Char(36)
+  storeId        String          @map("tienda_id") @db.Char(36)
+  userId         String?         @map("usuario_id") @db.Char(36)
+  documentType   String          @map("tipo_documento") @db.VarChar(20)
+  documentNumber String          @map("numero_documento") @db.VarChar(24)
+  fullName       String          @map("nombre_completo") @db.VarChar(180)
+  phone          String?         @db.VarChar(32)
+  address        String?         @db.VarChar(255)
+  active         Boolean         @default(true) @map("activo")
+  createdAt      DateTime        @default(now()) @map("creado_en") @db.DateTime(3)
+  updatedAt      DateTime        @updatedAt @map("actualizado_en") @db.DateTime(3)
+  store          Store           @relation(fields: [storeId], references: [id])
+  user           User?           @relation(fields: [userId], references: [id])
+  accounts       CreditAccount[]
+
+  @@id([id, storeId])
+  @@unique([storeId, documentType, documentNumber])
+  @@unique([storeId, userId])
+  @@index([userId])
+  @@map("CLIENTE")
+}
+
+model StoreAccess {
+  id        String    @id @default(uuid()) @db.Char(36)
+  storeId   String    @map("tienda_id") @db.Char(36)
+  userId    String    @map("usuario_id") @db.Char(36)
+  role      StoreRole @map("rol")
+  active    Boolean   @default(true) @map("activo")
+  createdAt DateTime  @default(now()) @map("creado_en") @db.DateTime(3)
+  updatedAt DateTime  @updatedAt @map("actualizado_en") @db.DateTime(3)
+  store     Store     @relation(fields: [storeId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([storeId, userId])
+  @@index([userId, active])
+  @@map("ACCESO_TIENDA")
+}
+
+model CreditAccount {
+  id                  String            @default(uuid()) @db.Char(36)
+  storeId             String            @map("tienda_id") @db.Char(36)
+  customerId          String            @map("cliente_id") @db.Char(36)
+  accountNumber       String            @map("numero_cuenta") @db.VarChar(40)
+  currency            String            @db.Char(3)
+  creditLimit         Decimal           @map("limite_credito") @db.Decimal(19, 4)
+  originalOutstanding Decimal           @default(0) @map("capital_original_pendiente") @db.Decimal(19, 12)
+  active              Boolean           @default(true) @map("activo")
+  createdAt           DateTime          @default(now()) @map("creado_en") @db.DateTime(3)
+  updatedAt           DateTime          @updatedAt @map("actualizado_en") @db.DateTime(3)
+  store               Store             @relation(fields: [storeId], references: [id])
+  customer            Customer          @relation(fields: [customerId, storeId], references: [id, storeId])
+  conditions          CreditCondition[]
+  purchases           Purchase[]
+  credits             Credit[]
+  cuts                Cut[]
+  payments            Payment[]
+
+  @@id([id, storeId])
+  @@unique([storeId, accountNumber])
+  @@index([customerId, storeId])
+  @@map("CUENTA_CREDITO")
+}
+
+model CreditCondition {
+  id                   String        @id @default(uuid()) @db.Char(36)
+  storeId              String        @map("tienda_id") @db.Char(36)
+  accountId            String        @map("cuenta_id") @db.Char(36)
+  version              Int
+  compensatoryRateKind RateKind      @map("tipo_tasa_compensatoria")
+  compensatoryRate     Decimal       @map("tasa_compensatoria") @db.Decimal(20, 12)
+  lateRateKind         RateKind      @map("tipo_tasa_moratoria")
+  lateRate             Decimal       @map("tasa_moratoria") @db.Decimal(20, 12)
+  billingDay           Int           @map("dia_corte") @db.UnsignedTinyInt
+  dueDay                Int           @map("dia_vencimiento") @db.UnsignedTinyInt
+  maxInstallments      Int           @map("maximo_cuotas") @db.UnsignedSmallInt
+  graceMonths          Int           @default(0) @map("meses_gracia_total") @db.UnsignedTinyInt
+  validFrom            DateTime      @map("vigente_desde") @db.DateTime(3)
+  validUntil           DateTime?     @map("vigente_hasta") @db.DateTime(3)
+  createdAt            DateTime      @default(now()) @map("creado_en") @db.DateTime(3)
+  store                Store         @relation(fields: [storeId], references: [id])
+  account              CreditAccount @relation(fields: [accountId, storeId], references: [id, storeId])
+  purchases            Purchase[]
+
+  @@unique([accountId, version])
+  @@index([storeId, validFrom])
+  @@map("CONDICION_CREDITICIA")
+}
+
+model ProductService {
+  id          String           @default(uuid()) @db.Char(36)
+  storeId     String           @map("tienda_id") @db.Char(36)
+  sku         String           @db.VarChar(64)
+  name        String           @map("nombre") @db.VarChar(180)
+  description String?          @map("descripcion") @db.Text
+  unitPrice   Decimal          @map("precio_unitario") @db.Decimal(19, 4)
+  currency    String           @db.Char(3)
+  imageUrl    String?          @map("imagen_url") @db.VarChar(2048)
+  active      Boolean          @default(true) @map("activo")
+  createdAt   DateTime         @default(now()) @map("creado_en") @db.DateTime(3)
+  updatedAt   DateTime         @updatedAt @map("actualizado_en") @db.DateTime(3)
+  store       Store            @relation(fields: [storeId], references: [id])
+  details     PurchaseDetail[]
+
+  @@id([id, storeId])
+  @@unique([storeId, sku])
+  @@map("PRODUCTO_SERVICIO")
+}
+
+model Purchase {
+  id                  String           @default(uuid()) @db.Char(36)
+  storeId             String           @map("tienda_id") @db.Char(36)
+  accountId           String           @map("cuenta_id") @db.Char(36)
+  conditionId         String           @map("condicion_id") @db.Char(36)
+  operatorUserId      String           @map("operador_usuario_id") @db.Char(36)
+  idempotencyKey      String           @map("clave_idempotencia") @db.VarChar(100)
+  mode                PurchaseMode     @map("modalidad")
+  installmentCount    Int?             @map("numero_cuotas") @db.UnsignedSmallInt
+  purchasedAt         DateTime         @map("comprado_en") @db.DateTime(3)
+  assignedCutAt       DateTime         @map("corte_asignado_en") @db.DateTime(3)
+  currency            String           @db.Char(3)
+  subtotal            Decimal          @db.Decimal(19, 4)
+  total               Decimal          @db.Decimal(19, 4)
+  status              PurchaseStatus   @default(ACTIVE) @map("estado")
+  createdAt           DateTime         @default(now()) @map("creado_en") @db.DateTime(3)
+  store               Store            @relation(fields: [storeId], references: [id])
+  account             CreditAccount    @relation(fields: [accountId, storeId], references: [id, storeId])
+  condition           CreditCondition  @relation(fields: [conditionId], references: [id])
+  operator            User             @relation("PurchaseOperator", fields: [operatorUserId], references: [id])
+  details             PurchaseDetail[]
+  credit              Credit?
+
+  @@id([id, storeId])
+  @@unique([storeId, idempotencyKey])
+  @@index([accountId, purchasedAt])
+  @@index([accountId, assignedCutAt])
+  @@map("COMPRA")
+}
+
+model PurchaseDetail {
+  id            String         @id @default(uuid()) @db.Char(36)
+  purchaseId    String         @map("compra_id") @db.Char(36)
+  storeId       String         @map("tienda_id") @db.Char(36)
+  productId     String         @map("producto_id") @db.Char(36)
+  description   String         @map("descripcion") @db.VarChar(255)
+  quantity      Decimal        @map("cantidad") @db.Decimal(12, 4)
+  unitPrice     Decimal        @map("precio_unitario") @db.Decimal(19, 4)
+  lineTotal     Decimal        @map("total_linea") @db.Decimal(19, 4)
+  purchase      Purchase       @relation(fields: [purchaseId, storeId], references: [id, storeId])
+  product       ProductService @relation(fields: [productId, storeId], references: [id, storeId])
+
+  @@index([purchaseId, storeId])
+  @@map("DETALLE_COMPRA")
+}
+
+model Credit {
+  id                  String       @id @default(uuid()) @db.Char(36)
+  storeId             String       @map("tienda_id") @db.Char(36)
+  accountId           String       @map("cuenta_id") @db.Char(36)
+  purchaseId          String       @map("compra_id") @db.Char(36)
+  principal           Decimal      @map("capital") @db.Decimal(19, 12)
+  currency            String       @db.Char(3)
+  baseDate            DateTime     @map("fecha_base") @db.Date
+  installmentCount    Int          @map("numero_cuotas") @db.UnsignedSmallInt
+  graceMonths         Int          @map("meses_gracia") @db.UnsignedTinyInt
+  effectiveDailyRate  Decimal      @map("tasa_efectiva_diaria") @db.Decimal(20, 15)
+  lateDailyRate       Decimal      @map("tasa_moratoria_diaria") @db.Decimal(20, 15)
+  status              CreditStatus @default(ACTIVE) @map("estado")
+  createdAt           DateTime     @default(now()) @map("creado_en") @db.DateTime(3)
+  account             CreditAccount @relation(fields: [accountId, storeId], references: [id, storeId])
+  purchase            Purchase     @relation(fields: [purchaseId, storeId], references: [id, storeId])
+  obligations         Obligation[]
+
+  @@unique([purchaseId, storeId])
+  @@index([accountId, storeId, status])
+  @@map("CREDITO")
+}
+
+model Obligation {
+  id                    String           @id @default(uuid()) @db.Char(36)
+  creditId              String           @map("credito_id") @db.Char(36)
+  installmentNumber     Int              @map("numero_cuota") @db.UnsignedSmallInt
+  dueDate               DateTime         @map("fecha_vencimiento") @db.Date
+  openingBalance        Decimal          @map("saldo_inicial") @db.Decimal(19, 12)
+  principalDue          Decimal          @map("capital_exigible") @db.Decimal(19, 12)
+  originalPrincipalRecoverable Decimal   @map("capital_original_recuperable") @db.Decimal(19, 12)
+  compensatoryInterest  Decimal          @map("interes_compensatorio") @db.Decimal(19, 12)
+  lateInterest          Decimal          @default(0) @map("interes_moratorio") @db.Decimal(19, 4)
+  amountDue             Decimal          @map("importe_exigible") @db.Decimal(19, 12)
+  paidAmount            Decimal          @default(0) @map("importe_pagado") @db.Decimal(19, 12)
+  status                ObligationStatus @default(PENDING) @map("estado")
+  createdAt             DateTime         @default(now()) @map("creado_en") @db.DateTime(3)
+  credit                Credit           @relation(fields: [creditId], references: [id])
+  cutDetails            CutDetail[]
+  paymentDetails        PaymentDetail[]
+
+  @@unique([creditId, installmentNumber])
+  @@index([dueDate, status])
+  @@map("OBLIGACION")
+}
+
+model Cut {
+  id             String      @default(uuid()) @db.Char(36)
+  storeId        String      @map("tienda_id") @db.Char(36)
+  accountId      String      @map("cuenta_id") @db.Char(36)
+  idempotencyKey String      @map("clave_idempotencia") @db.VarChar(100)
+  cutAt          DateTime    @map("corte_en") @db.DateTime(3)
+  periodStart    DateTime    @map("periodo_desde") @db.Date
+  periodEnd      DateTime    @map("periodo_hasta") @db.Date
+  dueDate        DateTime    @map("fecha_vencimiento") @db.Date
+  currency       String      @db.Char(3)
+  totalDue       Decimal     @map("total_exigible") @db.Decimal(19, 4)
+  createdAt      DateTime    @default(now()) @map("creado_en") @db.DateTime(3)
+  store          Store       @relation(fields: [storeId], references: [id])
+  account        CreditAccount @relation(fields: [accountId, storeId], references: [id, storeId])
+  details        CutDetail[]
+
+  @@id([id, storeId])
+  @@unique([accountId, cutAt])
+  @@unique([storeId, idempotencyKey])
+  @@map("CORTE")
+}
+
+model CutDetail {
+  id           String     @id @default(uuid()) @db.Char(36)
+  cutId        String     @map("corte_id") @db.Char(36)
+  storeId      String     @map("tienda_id") @db.Char(36)
+  obligationId String     @map("obligacion_id") @db.Char(36)
+  amountDue    Decimal    @map("importe_exigible") @db.Decimal(19, 4)
+  cut          Cut        @relation(fields: [cutId, storeId], references: [id, storeId])
+  obligation   Obligation @relation(fields: [obligationId], references: [id])
+
+  @@unique([cutId, obligationId])
+  @@map("DETALLE_CORTE")
+}
+
+model Payment {
+  id             String        @default(uuid()) @db.Char(36)
+  storeId        String        @map("tienda_id") @db.Char(36)
+  accountId      String        @map("cuenta_id") @db.Char(36)
+  operatorUserId String        @map("operador_usuario_id") @db.Char(36)
+  idempotencyKey String        @map("clave_idempotencia") @db.VarChar(100)
+  paidAt         DateTime      @map("pagado_en") @db.DateTime(3)
+  currency       String        @db.Char(3)
+  amount         Decimal       @map("importe") @db.Decimal(19, 4)
+  method         PaymentMethod @map("metodo")
+  receiptNumber  String        @unique @map("numero_comprobante") @db.VarChar(64)
+  createdAt      DateTime      @default(now()) @map("creado_en") @db.DateTime(3)
+  store          Store         @relation(fields: [storeId], references: [id])
+  account        CreditAccount @relation(fields: [accountId, storeId], references: [id, storeId])
+  operator       User          @relation("PaymentOperator", fields: [operatorUserId], references: [id])
+  details        PaymentDetail[]
+
+  @@id([id, storeId])
+  @@unique([storeId, idempotencyKey])
+  @@index([accountId, paidAt])
+  @@map("PAGO")
+}
+
+model PaymentDetail {
+  id                   String     @id @default(uuid()) @db.Char(36)
+  paymentId            String     @map("pago_id") @db.Char(36)
+  storeId              String     @map("tienda_id") @db.Char(36)
+  obligationId         String     @map("obligacion_id") @db.Char(36)
+  lateInterestPaid     Decimal    @map("mora_pagada") @db.Decimal(19, 4)
+  compensatoryPaid     Decimal    @map("interes_compensatorio_pagado") @db.Decimal(19, 4)
+  principalPaid        Decimal    @map("capital_pagado") @db.Decimal(19, 4)
+  payment              Payment    @relation(fields: [paymentId, storeId], references: [id, storeId])
+  obligation           Obligation @relation(fields: [obligationId], references: [id])
+
+  @@unique([paymentId, obligationId])
+  @@map("DETALLE_PAGO")
+}
+
+model AuditEvent {
+  id          String   @id @default(uuid()) @db.Char(36)
+  storeId     String?  @map("tienda_id") @db.Char(36)
+  userId      String?  @map("usuario_id") @db.Char(36)
+  event       String   @map("evento") @db.VarChar(100)
+  entity      String?  @map("entidad") @db.VarChar(100)
+  entityId    String?  @map("entidad_id") @db.VarChar(64)
+  ipAddress   String?  @map("direccion_ip") @db.VarChar(64)
+  userAgent   String?  @map("agente_usuario") @db.VarChar(512)
+  details     Json?    @map("detalles")
+  createdAt   DateTime @default(now()) @map("creado_en") @db.DateTime(3)
+  store       Store?   @relation(fields: [storeId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([userId, createdAt])
+  @@map("AUDITORIA")
+}
+
+model UserInvitation {
+  id          String           @id @default(uuid()) @db.Char(36)
+  storeId     String?          @map("tienda_id") @db.Char(36)
+  issuedById  String           @map("emitida_por_id") @db.Char(36)
+  email       String           @map("correo") @db.VarChar(254)
+  tokenHash   String           @unique @map("token_hash") @db.Char(64)
+  platformRole PlatformRole    @default(USER) @map("rol_plataforma")
+  storeRole   StoreRole?       @map("rol_tienda")
+  status      InvitationStatus @default(PENDING) @map("estado")
+  expiresAt   DateTime         @map("vence_en") @db.DateTime(3)
+  acceptedAt  DateTime?        @map("aceptada_en") @db.DateTime(3)
+  createdAt   DateTime         @default(now()) @map("creado_en") @db.DateTime(3)
+  store       Store?           @relation(fields: [storeId], references: [id])
+  issuedBy    User             @relation("InvitationIssuer", fields: [issuedById], references: [id])
+
+  @@index([email, status])
+  @@map("INVITACION_USUARIO")
+}
+
+model RefreshSession {
+  id          String   @id @default(uuid()) @db.Char(36)
+  userId      String   @map("usuario_id") @db.Char(36)
+  tokenHash   String   @unique @map("token_hash") @db.Char(64)
+  expiresAt   DateTime @map("vence_en") @db.DateTime(3)
+  revokedAt   DateTime? @map("revocada_en") @db.DateTime(3)
+  replacedById String? @map("reemplazada_por_id") @db.Char(36)
+  createdAt   DateTime @default(now()) @map("creado_en") @db.DateTime(3)
+  user        User     @relation(fields: [userId], references: [id])
+  replacedBy  RefreshSession? @relation("SessionRotation", fields: [replacedById], references: [id])
+  replaces    RefreshSession[] @relation("SessionRotation")
+
+  @@index([userId, expiresAt])
+  @@map("SESION_REFRESH")
+}

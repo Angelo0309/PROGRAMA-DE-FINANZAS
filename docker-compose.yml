@@ -1,0 +1,53 @@
+services:
+  database:
+    image: mariadb:12.3
+    environment:
+      MARIADB_DATABASE: CrediCuentaDB
+      MARIADB_USER: credicuenta
+      MARIADB_PASSWORD: local_demo_2026
+      MARIADB_ROOT_PASSWORD: local_root_2026
+    ports:
+      - "${CREDICUENTA_DB_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - credicuenta_db:/var/lib/mysql
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: mysql://credicuenta:local_demo_2026@database:3306/CrediCuentaDB
+      JWT_ACCESS_SECRET: local_docker_secret_change_before_deploying
+      WEB_ORIGIN: http://localhost:8080
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000/api/v1
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  credicuenta_db:

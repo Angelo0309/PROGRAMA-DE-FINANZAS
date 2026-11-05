@@ -1,6 +1,6 @@
 {
   "name": "credicuenta",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Control multi-tienda de creditos comerciales",
   "engines": {
@@ -15,7 +15,13 @@
     "dev:web": "npm run dev --workspace @credicuenta/web",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "test:integration:local": "node scripts/test-integration-local.mjs",
+    "test:deployment:local": "npm run build && node scripts/smoke-deployment-local.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.10.1": true,
+    "prisma@7.10.1": true,
+    "esbuild@0.28.2": true
   }
 }
-

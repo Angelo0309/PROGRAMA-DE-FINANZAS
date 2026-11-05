@@ -1,0 +1,406 @@
+openapi: 3.1.0
+info:
+  title: CrediCuenta API
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000/api/v1
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "201":
+          description: Sesion creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+  /me/profile:
+    get:
+      operationId: getProfile
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Perfil y accesos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+  /platform/stores:
+    get:
+      operationId: listStores
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Tiendas
+    post:
+      operationId: createStore
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [taxId, name, currency, timeZone]
+              properties:
+                taxId: { type: string }
+                name: { type: string }
+                currency: { type: string }
+                timeZone: { type: string }
+      responses:
+        "201": { description: Tienda creada }
+  /platform/stores/{storeId}:
+    delete:
+      operationId: deactivateStore
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+      responses:
+        "200": { description: Tienda desactivada logicamente }
+        "404": { description: Tienda activa no encontrada }
+  /platform/invitations:
+    post:
+      operationId: createInvitation
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201": { description: Invitacion creada; token visible una sola vez }
+  /platform/audit:
+    get:
+      operationId: listAudit
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Eventos auditados
+  /stores/{storeId}/clients:
+    get:
+      operationId: listClients
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+      responses:
+        "200": { description: Clientes }
+  /stores/{storeId}/clients/{clientId}:
+    delete:
+      operationId: deactivateClient
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+        - $ref: "#/components/parameters/clientId"
+      responses:
+        "200": { description: Cliente y cuentas activas desactivados logicamente }
+        "404": { description: Cliente activo no encontrado }
+  /stores/{storeId}/products:
+    get:
+      operationId: listProducts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+      responses:
+        "200": { description: Productos }
+  /stores/{storeId}/products/{productId}:
+    delete:
+      operationId: deactivateProduct
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+        - $ref: "#/components/parameters/productId"
+      responses:
+        "200": { description: Producto o servicio desactivado logicamente }
+        "404": { description: Producto o servicio activo no encontrado }
+  /stores/{storeId}/accounts:
+    get:
+      operationId: listAccounts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+      responses:
+        "200": { description: Cuentas }
+  /stores/{storeId}/accounts/{accountId}:
+    delete:
+      operationId: deactivateAccount
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+        - $ref: "#/components/parameters/accountId"
+      responses:
+        "200": { description: Cuenta de credito desactivada logicamente }
+        "404": { description: Cuenta activa no encontrada }
+  /stores/{storeId}/purchases:
+    post:
+      operationId: createPurchase
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        "201": { description: Compra registrada }
+  /accounts/{accountId}/payment-quote:
+    get:
+      operationId: getPaymentQuote
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/accountId"
+        - name: storeId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: paidAt
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Importe completo exigible calculado para la fecha de pago
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentQuote"
+  /accounts/{accountId}/cuts:
+    post:
+      operationId: createCut
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/accountId"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 100 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CutInput"
+      responses:
+        "201": { description: Corte manual emitido }
+  /accounts/{accountId}/statements:
+    get:
+      operationId: getStatements
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/accountId"
+        - name: storeId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Estados de cuenta emitidos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Statement" }
+  /accounts/{accountId}/payments:
+    post:
+      operationId: createPayment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/accountId"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 100 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201": { description: Pago completo registrado }
+        "400": { description: Importe parcial, excesivo, moneda incorrecta o sin deuda exigible }
+  /payments/{paymentId}/receipt:
+    get:
+      operationId: getPaymentReceipt
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: storeId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Comprobante con aplicación a mora, interés y capital
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentReceipt"
+  /me/accounts:
+    get:
+      operationId: getMyAccounts
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Cuentas del cliente }
+  /me/statements:
+    get:
+      operationId: getMyStatements
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Estados del cliente }
+  /me/purchases:
+    get:
+      operationId: getMyPurchases
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Compras del cliente }
+  /me/schedule:
+    get:
+      operationId: getMySchedule
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Cronograma de obligaciones del cliente }
+  /me/payments:
+    get:
+      operationId: getMyPayments
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Historial de pagos y comprobantes del cliente }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    storeId:
+      name: storeId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    clientId:
+      name: clientId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    productId:
+      name: productId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    accountId:
+      name: accountId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    DecimalString:
+      type: string
+      pattern: '^\\d+(?:\\.\\d+)?$'
+      example: "120.00"
+    LoginInput:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier: { type: string }
+        password: { type: string, format: password }
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken, tokenType, expiresIn]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        tokenType: { type: string, const: Bearer }
+        expiresIn: { type: integer }
+    StoreAccess:
+      type: object
+      required: [storeId, storeName, currency, role]
+      properties:
+        storeId: { type: string, format: uuid }
+        storeName: { type: string }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        role:
+          type: string
+          enum: [STORE_ADMIN, OPERATOR, CLIENT]
+    Profile:
+      type: object
+      required: [id, displayName, platformRole, storeAccesses]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+        email: { type: string, format: email }
+        platformRole:
+          type: string
+          enum: [PLATFORM_ADMIN, USER]
+        storeAccesses:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoreAccess"
+    PaymentInput:
+      type: object
+      required: [storeId, paidAt, currency, amount]
+      properties:
+        storeId: { type: string, format: uuid }
+        paidAt: { type: string, format: date-time }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        amount: { $ref: "#/components/schemas/DecimalString" }
+    CutInput:
+      type: object
+      required: [storeId, cutAt]
+      properties:
+        storeId: { type: string, format: uuid }
+        cutAt: { type: string, format: date-time }
+    Statement:
+      type: object
+      required: [id, cutAt, periodStart, periodEnd, dueDate, currency, totalDue]
+      properties:
+        id: { type: string, format: uuid }
+        cutAt: { type: string, format: date-time }
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        totalDue: { $ref: "#/components/schemas/DecimalString" }
+    PaymentQuote:
+      type: object
+      required: [accountId, paidOn, currency, amount, obligations]
+      properties:
+        accountId: { type: string, format: uuid }
+        paidOn: { type: string, format: date }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        amount: { $ref: "#/components/schemas/DecimalString" }
+        obligations:
+          type: array
+          items:
+            type: object
+            required: [id, dueDate, lateDays, lateInterest, compensatoryInterest, principal]
+            properties:
+              id: { type: string, format: uuid }
+              dueDate: { type: string, format: date }
+              lateDays: { type: integer, minimum: 0 }
+              lateInterest: { $ref: "#/components/schemas/DecimalString" }
+              compensatoryInterest: { $ref: "#/components/schemas/DecimalString" }
+              principal: { $ref: "#/components/schemas/DecimalString" }
+    PaymentReceipt:
+      type: object
+      required: [id, receiptNumber, paidAt, currency, amount, allocations]
+      properties:
+        id: { type: string, format: uuid }
+        receiptNumber: { type: string }
+        paidAt: { type: string, format: date-time }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        amount: { $ref: "#/components/schemas/DecimalString" }
+        allocations:
+          type: array
+          items:
+            type: object
+            required: [obligationId, lateInterestPaid, compensatoryPaid, principalPaid]
+            properties:
+              obligationId: { type: string, format: uuid }
+              lateInterestPaid: { $ref: "#/components/schemas/DecimalString" }
+              compensatoryPaid: { $ref: "#/components/schemas/DecimalString" }
+              principalPaid: { $ref: "#/components/schemas/DecimalString" }

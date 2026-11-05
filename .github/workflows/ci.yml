@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:12.3
+        env:
+          MARIADB_DATABASE: CrediCuentaDB
+          MARIADB_USER: credicuenta
+          MARIADB_PASSWORD: ci_password
+          MARIADB_ROOT_PASSWORD: ci_root_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: mysql://credicuenta:ci_password@127.0.0.1:3306/CrediCuentaDB
+      TEST_DATABASE_URL: mysql://credicuenta:ci_password@127.0.0.1:3306/CrediCuentaDB
+      JWT_ACCESS_SECRET: ci_secret_with_at_least_32_characters
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.2
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run prisma:generate --workspace @credicuenta/api
+      - run: npm exec --workspace @credicuenta/api -- prisma migrate deploy
+      - run: npm exec --workspace @credicuenta/api -- prisma db seed
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm exec --workspace @credicuenta/web -- playwright install --with-deps chromium
+      - run: npm run test:e2e --workspace @credicuenta/web

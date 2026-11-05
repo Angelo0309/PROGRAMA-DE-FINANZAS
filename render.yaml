@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: credicuenta-api-angelo0309
+    plan: free
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    healthCheckPath: /api/v1/health/ready
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: WEB_ORIGIN
+        sync: false
+      - key: PORT
+        value: 3000
+  - type: web
+    name: credicuenta-web-angelo0309
+    plan: free
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    envVars:
+      - key: VITE_API_URL
+        sync: false
