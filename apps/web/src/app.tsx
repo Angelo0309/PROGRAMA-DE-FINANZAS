@@ -29,6 +29,7 @@ import {
 } from './api/client';
 import { ClientPaymentPlans } from './components/client/ClientPaymentPlans';
 import './styles.css';
+import { PurchaseHistory } from './components/purchases/PurchaseHistory';
 
 const defaultApi = createApiClient();
 const loginSchema = z.object({
@@ -1904,7 +1905,7 @@ function ClientWorkspace({ api, activeSection }: { api: ApiClient; activeSection
     });
   }, [api]);
 
-  if (activeSection === 'Mis compras') return <section className="paper-section client-ledger"><p className="folio">MIS COMPRAS</p><h2>Consumos registrados</h2>{purchases.length === 0 ? <p className="empty-state">No hay compras recientes.</p> : purchases.map((purchase) => <article className="client-purchase" key={purchase.id}><div><span>{commercialInstantInLima(purchase.purchasedAt)}</span><strong>{officialMoney(purchase.currency, purchase.total)}</strong></div><div className="client-purchase-items">{purchase.items.map((item) => <div key={`${purchase.id}-${item.productId}`}><ProductImage src={item.imageUrl} name={item.description} /><p>{item.description}</p><span>{item.quantity} × {officialMoney(purchase.currency, item.unitPrice)}</span></div>)}</div></article>)}</section>;
+  if (activeSection === 'Mis compras') return <PurchaseHistory purchases={purchases} schedule={schedule} />;
 
   if (activeSection === 'Estado de cuenta') return <section className="paper-section"><p className="folio">ESTADOS DE CUENTA</p><h2>Cortes emitidos</h2>{statements.length === 0 ? <p className="empty-state">No hay estados de cuenta emitidos.</p> : <div className="table-wrapper"><table aria-label="Mis estados de cuenta"><thead><tr><th>Vencimiento</th><th>Importe exigible</th><th>Estado</th></tr></thead><tbody>{statements.map((item) => <tr key={item.id}><td>{commercialDate(item.dueDate)}</td><td className="money-cell">{officialMoney(item.currency, item.totalDue)}</td><td><span className="status-pill ready">Emitido</span></td></tr>)}</tbody></table></div>}</section>;
 
