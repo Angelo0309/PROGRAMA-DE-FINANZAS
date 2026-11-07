@@ -1,0 +1,7 @@
+.client-plan-filters { display: flex; flex-wrap: wrap; gap: 14px; margin: 18px 0 6px; }
+.client-plan-filter { display: grid; width: min(360px, 100%); gap: 7px; }
+.client-plan-filter label { margin: 0; }
+.client-plans .schedule-metrics { margin: 16px 0 18px; }
+@media (max-width: 760px) {
+  .client-plans .schedule-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

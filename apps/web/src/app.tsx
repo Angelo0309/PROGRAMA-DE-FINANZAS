@@ -27,6 +27,7 @@ import {
   type StatementView,
   type StoreAccess,
 } from './api/client';
+import { ClientPaymentPlans } from './components/client/ClientPaymentPlans';
 import './styles.css';
 
 const defaultApi = createApiClient();
@@ -1907,7 +1908,7 @@ function ClientWorkspace({ api, activeSection }: { api: ApiClient; activeSection
 
   if (activeSection === 'Estado de cuenta') return <section className="paper-section"><p className="folio">ESTADOS DE CUENTA</p><h2>Cortes emitidos</h2>{statements.length === 0 ? <p className="empty-state">No hay estados de cuenta emitidos.</p> : <div className="table-wrapper"><table aria-label="Mis estados de cuenta"><thead><tr><th>Vencimiento</th><th>Importe exigible</th><th>Estado</th></tr></thead><tbody>{statements.map((item) => <tr key={item.id}><td>{commercialDate(item.dueDate)}</td><td className="money-cell">{officialMoney(item.currency, item.totalDue)}</td><td><span className="status-pill ready">Emitido</span></td></tr>)}</tbody></table></div>}</section>;
 
-  if (activeSection === 'Plan de pagos') return <section className="paper-section"><p className="folio">PLAN DE PAGOS</p><h2>Cuotas y vencimientos</h2>{schedule.length === 0 ? <p className="empty-state">No hay cuotas programadas.</p> : <div className="table-wrapper"><table aria-label="Mi plan de pagos"><thead><tr><th>Cuota</th><th>Vencimiento</th><th>Capital</th><th>Interés</th><th>Importe</th><th>Estado</th></tr></thead><tbody>{schedule.map((item) => { const status = obligationStatus(item.status); return <tr key={item.id}><td>{item.installmentNumber}</td><td>{commercialDate(item.dueDate)}</td><td>{officialMoney(item.currency, item.principalDue)}</td><td>{officialMoney(item.currency, item.compensatoryInterest)}</td><td className="money-cell">{officialMoney(item.currency, item.amountDue)}</td><td><span className={`status-pill ${status.tone}`}>{status.label}</span></td></tr>; })}</tbody></table></div>}</section>;
+  if (activeSection === 'Plan de pagos') return <ClientPaymentPlans schedule={schedule} accounts={accounts} />;
 
   if (activeSection === 'Historial de pagos') return <section className="paper-section"><p className="folio">HISTORIAL DE PAGOS</p><h2>Comprobantes registrados</h2>{payments.length === 0 ? <p className="empty-state">No hay pagos registrados.</p> : <div className="table-wrapper"><table aria-label="Mi historial de pagos"><thead><tr><th>Comprobante</th><th>Fecha</th><th>Método</th><th>Importe</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id}><td>{payment.receiptNumber}</td><td>{commercialInstantInLima(payment.paidAt)}</td><td>{payment.method.replaceAll('_', ' ')}</td><td className="money-cell">{officialMoney(payment.currency, payment.amount)}</td></tr>)}</tbody></table></div>}</section>;
 
