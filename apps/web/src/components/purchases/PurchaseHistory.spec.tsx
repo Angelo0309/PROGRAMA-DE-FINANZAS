@@ -57,7 +57,11 @@ describe('PurchaseHistory', () => {
     const products = within(screen.getByRole('table', { name: 'Productos de la compra' }));
     expect(products.getByRole('img', { name: 'Cafetera compacta' })).toBeVisible();
     expect(products.getByText('Filtro de papel')).toBeVisible();
-    expect(products.getByText('S/ 179.90')).toBeVisible();
+    // Precio unitario 179.9000 y total de línea 179.90 se muestran igual: S/ 179.90.
+    expect(products.getAllByText('S/ 179.90')).toHaveLength(2);
+    expect(products.queryByText('S/ 179.9000')).not.toBeInTheDocument();
+    expect(products.getByText('S/ 5.00')).toBeVisible();
+    expect(products.getByText('S/ 10.00')).toBeVisible();
     expect(products.getByText('2')).toBeVisible();
     expect(products.getByText('Sin imagen')).toBeVisible();
 

@@ -30,6 +30,16 @@ export const monthLabel = (yearMonth: string) => {
   return `${MONTH_NAMES[Number(month) - 1] ?? month} ${year}`;
 };
 
+/**
+ * Muestra el precio unitario con 2 decimales cuando los decimales extra son ceros (80.0000 → 80.00).
+ * Si la API envía precisión real (12.3456) se muestra completa: el frontend no redondea importes.
+ */
+export const displayUnitPrice = (amount: string) => {
+  const match = /^(-?\d+)\.(\d{2})(\d*)$/.exec(amount);
+  if (!match || /[1-9]/.test(match[3])) return amount;
+  return `${match[1]}.${match[2]}`;
+};
+
 export const purchaseCode = (purchaseId: string) => purchaseId.slice(0, 8).toUpperCase();
 
 /** Muestra la cantidad recibida sin ceros decimales sobrantes (1.0000 → 1). No altera importes. */

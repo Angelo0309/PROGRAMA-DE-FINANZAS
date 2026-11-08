@@ -3,6 +3,7 @@ import { PurchaseItemImage } from './PurchaseItemImage';
 import {
   commercialDate,
   displayQuantity,
+  displayUnitPrice,
   limaDate,
   obligationStatus,
   officialMoney,
@@ -33,7 +34,7 @@ export function PurchaseDetail({ purchase, obligations }: { purchase: PurchaseVi
               <tr key={`${purchase.id}-${item.productId}`}>
                 <td><div className="purchase-product"><PurchaseItemImage src={item.imageUrl} name={item.description} /><span>{item.description}</span></div></td>
                 <td>{displayQuantity(item.quantity)}</td>
-                <td>{officialMoney(purchase.currency, item.unitPrice)}</td>
+                <td>{officialMoney(purchase.currency, displayUnitPrice(item.unitPrice))}</td>
                 <td className="money-cell">{officialMoney(purchase.currency, item.lineTotal)}</td>
               </tr>
             ))}
