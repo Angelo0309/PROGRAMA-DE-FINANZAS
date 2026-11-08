@@ -14,6 +14,7 @@ const accounts: AccountView[] = [
   { id: 'account-1', accountNumber: 'CC-000001', storeName: 'Bodega Demo', creditLimit: '3000.00', originalOutstanding: '300.00', currency: 'PEN' },
   { id: 'account-2', accountNumber: 'CC-DEMO-PAGO', storeName: 'Bodega Demo', creditLimit: '1000.00', originalOutstanding: '50.00', currency: 'PEN' },
 ];
+const singleAccount = [accounts[0]];
 
 function obligation(overrides: Partial<ClientScheduleItem>): ClientScheduleItem {
   return {
@@ -60,7 +61,7 @@ describe('ClientPaymentPlans', () => {
   afterEach(cleanup);
 
   it('shows every plan of the account by default with an identifying Plan column', () => {
-    render(<ClientPaymentPlans schedule={singleAccountSchedule} accounts={accounts} />);
+    render(<ClientPaymentPlans schedule={singleAccountSchedule} accounts={singleAccount} />);
 
     expect(screen.queryByRole('combobox', { name: 'Cuenta' })).not.toBeInTheDocument();
     const selector = screen.getByRole('combobox', { name: 'Plan de pago' });
@@ -77,7 +78,7 @@ describe('ClientPaymentPlans', () => {
   });
 
   it('filters rows and summary by the selected purchase plan', () => {
-    render(<ClientPaymentPlans schedule={singleAccountSchedule} accounts={accounts} />);
+    render(<ClientPaymentPlans schedule={singleAccountSchedule} accounts={singleAccount} />);
     const selector = screen.getByRole('combobox', { name: 'Plan de pago' });
 
     fireEvent.change(selector, { target: { value: firstPurchaseId } });
@@ -122,11 +123,58 @@ describe('ClientPaymentPlans', () => {
     expect(metric('Importe del próximo vencimiento').getByText('S/ 50.00')).toBeVisible();
   });
 
+  it('labels plans with the Lima purchase date, matching Mis compras', () => {
+    render(<ClientPaymentPlans schedule={[
+      // 02/11/2026 03:30 UTC = 01/11/2026 22:30 en Lima.
+      obligation({ id: 'late-night-row', purchaseId: '3d01b4d2-0000-4000-8000-000000000000', purchasedAt: '2026-11-02T03:30:00.000Z' }),
+    ]} accounts={singleAccount} />);
+
+    const selector = screen.getByRole('combobox', { name: 'Plan de pago' });
+    expect(within(selector).getByRole('option', { name: 'Compra 01/11/2026 · 3D01B4D2' })).toBeInTheDocument();
+    expect(within(selector).queryByRole('option', { name: /02\/11\/2026/ })).not.toBeInTheDocument();
+    expect(planTable().getByText('Compra 01/11/2026 · 3D01B4D2')).toBeVisible();
+  });
+
+  it('lists every client account and explains when an account has no payment plans', () => {
+    const withEmptyAccount: AccountView[] = [
+      ...accounts,
+      { id: 'account-3', accountNumber: 'CC-SIN-CUOTAS', storeName: 'Bodega Demo', creditLimit: '500.00', originalOutstanding: '0.00', currency: 'PEN' },
+    ];
+    render(<ClientPaymentPlans schedule={twoAccountSchedule} accounts={withEmptyAccount} />);
+
+    const accountSelector = screen.getByRole('combobox', { name: 'Cuenta' });
+    expect(optionNames(accountSelector)).toEqual([
+      'Bodega Demo · Cuenta CC-000001',
+      'Bodega Demo · Cuenta CC-DEMO-PAGO',
+      'Bodega Demo · Cuenta CC-SIN-CUOTAS',
+    ]);
+    expect(accountSelector).toHaveValue('account-1');
+
+    fireEvent.change(accountSelector, { target: { value: 'account-3' } });
+    expect(screen.getByText('Esta cuenta no tiene planes de pago.')).toBeVisible();
+    expect(screen.queryByRole('combobox', { name: 'Plan de pago' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: /mi plan de pagos/i })).not.toBeInTheDocument();
+
+    fireEvent.change(accountSelector, { target: { value: 'account-1' } });
+    expect(planTable().getAllByRole('row')).toHaveLength(4);
+  });
+
+  it('opens on an account with plans when the first account has none', () => {
+    const emptyFirst: AccountView[] = [
+      { id: 'account-3', accountNumber: 'CC-SIN-CUOTAS', storeName: 'Bodega Demo', creditLimit: '500.00', originalOutstanding: '0.00', currency: 'PEN' },
+      ...singleAccount,
+    ];
+    render(<ClientPaymentPlans schedule={singleAccountSchedule} accounts={emptyFirst} />);
+
+    expect(screen.getByRole('combobox', { name: 'Cuenta' })).toHaveValue('account-1');
+    expect(planTable().getAllByRole('row')).toHaveLength(4);
+  });
+
   it('keeps purchases made on the same day distinguishable by their short code', () => {
     render(<ClientPaymentPlans schedule={[
       obligation({ id: 'row-a', purchaseId: firstPurchaseId }),
       obligation({ id: 'row-b', purchaseId: secondPurchaseId }),
-    ]} accounts={accounts} />);
+    ]} accounts={singleAccount} />);
 
     const selector = screen.getByRole('combobox', { name: 'Plan de pago' });
     expect(within(selector).getByRole('option', { name: 'Compra 20/10/2026 · 11111111' })).toBeInTheDocument();

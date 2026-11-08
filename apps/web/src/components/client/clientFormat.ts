@@ -6,8 +6,21 @@ export const commercialDate = (date: string) => {
   return `${day}/${month}/${year}`;
 };
 
+/** Fecha comercial (AAAA-MM-DD) de un instante ISO en la zona horaria de Lima. */
+export function limaDate(instant: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(instant));
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+// purchasedAt es un instante UTC; se muestra con la fecha de Lima, igual que en Mis compras.
 export const purchasePlanLabel = (purchasedAt: string, purchaseId: string) =>
-  `Compra ${commercialDate(purchasedAt)} · ${purchaseId.slice(0, 8).toUpperCase()}`;
+  `Compra ${commercialDate(limaDate(purchasedAt))} · ${purchaseId.slice(0, 8).toUpperCase()}`;
 
 export const obligationStatus = (status: string) => ({
   PAID: { label: 'Pagada', tone: 'ready' },
