@@ -28,6 +28,7 @@ import {
   type StoreAccess,
 } from './api/client';
 import { ClientPaymentPlans } from './components/client/ClientPaymentPlans';
+import { PaymentHistory } from './components/payments/PaymentHistory';
 import './styles.css';
 import { PurchaseHistory } from './components/purchases/PurchaseHistory';
 
@@ -1911,7 +1912,7 @@ function ClientWorkspace({ api, activeSection }: { api: ApiClient; activeSection
 
   if (activeSection === 'Plan de pagos') return <ClientPaymentPlans schedule={schedule} accounts={accounts} />;
 
-  if (activeSection === 'Historial de pagos') return <section className="paper-section"><p className="folio">HISTORIAL DE PAGOS</p><h2>Comprobantes registrados</h2>{payments.length === 0 ? <p className="empty-state">No hay pagos registrados.</p> : <div className="table-wrapper"><table aria-label="Mi historial de pagos"><thead><tr><th>Comprobante</th><th>Fecha</th><th>Método</th><th>Importe</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id}><td>{payment.receiptNumber}</td><td>{commercialInstantInLima(payment.paidAt)}</td><td>{payment.method.replaceAll('_', ' ')}</td><td className="money-cell">{officialMoney(payment.currency, payment.amount)}</td></tr>)}</tbody></table></div>}</section>;
+  if (activeSection === 'Historial de pagos') return <PaymentHistory payments={payments} accounts={accounts} />;
 
   if (activeSection === 'Ayuda') return <section className="paper-section"><p className="folio">AYUDA</p><h2>Cómo leer tu CrediCuenta</h2><p className="empty-state">Los importes mostrados provienen del cálculo oficial. Si necesitas corregir una compra o un pago, comunícate con la tienda que administra tu cuenta.</p></section>;
 
