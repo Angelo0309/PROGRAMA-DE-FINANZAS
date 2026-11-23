@@ -57,6 +57,45 @@ e2e('CrediCuenta HTTP workflow', () => {
       })
       .expect(201);
 
+    const revocableInvitation = await request(app.getHttpServer())
+      .post('/api/v1/platform/invitations')
+      .set('Authorization', `Bearer ${platformLogin.body.accessToken as string}`)
+      .send({
+        email: `revocable-${suffix}@credicuenta.test`,
+        platformRole: 'USER',
+        storeId,
+        storeRole: 'STORE_ADMIN',
+        expiresAt: '2026-12-31T23:59:59-05:00',
+      })
+      .expect(201);
+    await request(app.getHttpServer())
+      .get('/api/v1/platform/users')
+      .set('Authorization', `Bearer ${platformLogin.body.accessToken as string}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual(expect.arrayContaining([
+          expect.objectContaining({ platformRole: 'PLATFORM_ADMIN' }),
+        ]));
+        expect(body[0]).not.toHaveProperty('passwordHash');
+      });
+    await request(app.getHttpServer())
+      .get('/api/v1/platform/invitations')
+      .set('Authorization', `Bearer ${platformLogin.body.accessToken as string}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual(expect.arrayContaining([
+          expect.objectContaining({ id: revocableInvitation.body.id, status: 'PENDING' }),
+        ]));
+        const listed = body.find((item: { id: string }) => item.id === revocableInvitation.body.id);
+        expect(listed).not.toHaveProperty('token');
+        expect(listed).not.toHaveProperty('tokenHash');
+      });
+    await request(app.getHttpServer())
+      .post(`/api/v1/platform/invitations/${revocableInvitation.body.id as string}/revoke`)
+      .set('Authorization', `Bearer ${platformLogin.body.accessToken as string}`)
+      .expect(200)
+      .expect({ id: revocableInvitation.body.id, status: 'REVOKED' });
+
     const activation = await request(app.getHttpServer())
       .post('/api/v1/auth/activate')
       .send({
@@ -79,6 +118,19 @@ e2e('CrediCuenta HTTP workflow', () => {
       })
       .expect(201);
     const authorization = `Bearer ${businessLogin.body.accessToken as string}`;
+
+    await request(app.getHttpServer())
+      .get('/api/v1/platform/users')
+      .set('Authorization', authorization)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get('/api/v1/platform/invitations')
+      .set('Authorization', authorization)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(`/api/v1/platform/invitations/${revocableInvitation.body.id as string}/revoke`)
+      .set('Authorization', authorization)
+      .expect(403);
 
     const client = await request(app.getHttpServer())
       .post(`/api/v1/stores/${storeId}/clients`)
