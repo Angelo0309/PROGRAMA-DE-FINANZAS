@@ -29,6 +29,7 @@ import {
 } from './api/client';
 import { ClientPaymentPlans } from './components/client/ClientPaymentPlans';
 import { PaymentHistory } from './components/payments/PaymentHistory';
+import { PlatformAccessManagement } from './components/platform/PlatformAccessManagement';
 import './styles.css';
 import { PurchaseHistory } from './components/purchases/PurchaseHistory';
 
@@ -439,10 +440,6 @@ function PlatformWorkspace({ api, profile, activeSection }: { api: ApiClient; pr
   const [showStoreForm, setShowStoreForm] = useState(false);
   const [taxId, setTaxId] = useState('');
   const [storeName, setStoreName] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteStoreId, setInviteStoreId] = useState('');
-  const [activationLink, setActivationLink] = useState('');
-  const [copyNotice, setCopyNotice] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -472,41 +469,6 @@ function PlatformWorkspace({ api, profile, activeSection }: { api: ApiClient; pr
       setError('');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'No fue posible crear la tienda.');
-    }
-  }
-
-  async function inviteAdministrator(event: FormEvent) {
-    event.preventDefault();
-    if (!inviteEmail.includes('@') || !inviteStoreId) {
-      setError('Seleccione una tienda e ingrese un correo válido.');
-      return;
-    }
-    try {
-      const invitation = await api.createInvitation({
-        email: inviteEmail,
-        platformRole: 'USER',
-        storeId: inviteStoreId,
-        storeRole: 'STORE_ADMIN',
-        expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
-      });
-      setActivationLink(
-        `${window.location.origin}/activar?token=${encodeURIComponent(invitation.token)}`,
-      );
-      setCopyNotice('');
-      setInviteEmail('');
-      setError('');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'No fue posible crear la invitación.');
-    }
-  }
-
-  async function copyActivationLink() {
-    if (!navigator.clipboard) return;
-    try {
-      await navigator.clipboard.writeText(activationLink);
-      setCopyNotice('Enlace copiado.');
-    } catch {
-      setCopyNotice('');
     }
   }
 
@@ -553,35 +515,7 @@ function PlatformWorkspace({ api, profile, activeSection }: { api: ApiClient; pr
         )}
       </section>}
       {showStores && error && <Alert severity="error">{error}</Alert>}
-      {showUsers && <section className="paper-section invitation-section">
-        <div><p className="folio">ACCESOS · INVITACIÓN</p><h2>Administrador del negocio</h2></div>
-        <form className="inline-form" onSubmit={inviteAdministrator}>
-          <label htmlFor="invite-store">Tienda asignada</label>
-          <select id="invite-store" value={inviteStoreId} onChange={(event) => setInviteStoreId(event.target.value)}>
-            <option value="">Seleccione una tienda</option>
-            {stores.filter((store) => store.active).map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-          </select>
-          <label htmlFor="invite-email">Correo del administrador</label>
-          <input id="invite-email" type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} />
-          <button className="primary-button" type="submit">Crear invitación</button>
-        </form>
-        {activationLink && (
-          <div className="invitation-link">
-            <label htmlFor="activation-link">Enlace de activación</label>
-            <div>
-              <input id="activation-link" readOnly value={activationLink} />
-              <button className="secondary-button" type="button" onClick={() => void copyActivationLink()}>
-                Copiar enlace
-              </button>
-            </div>
-            <p className="field-help">
-              Este enlace se muestra una sola vez. Entrégalo únicamente a la persona invitada.
-              {copyNotice && <> {copyNotice}</>}
-            </p>
-          </div>
-        )}
-        {!showStores && error && <Alert severity="error">{error}</Alert>}
-      </section>}
+      {showUsers && <PlatformAccessManagement api={api} stores={stores} />}
       {activeSection === 'Auditoría' && <section className="paper-section"><p className="folio">TRAZABILIDAD</p><h2>Eventos de auditoría</h2>{events.length === 0 ? <p className="empty-state">No hay eventos registrados.</p> : <div className="table-wrapper"><table aria-label="Eventos de auditoría"><thead><tr><th>Evento</th><th>Fecha</th></tr></thead><tbody>{events.map((event) => <tr key={event.id}><td>{event.event}</td><td>{commercialInstantInLima(event.createdAt)}</td></tr>)}</tbody></table></div>}</section>}
       {!['Dashboard', 'Gestión de tiendas', 'Gestión de usuarios', 'Auditoría'].includes(activeSection) && <section className="paper-section"><h2>{activeSection}</h2><p className="empty-state">Esta sección queda reservada para una ampliación posterior; no forma parte del alcance académico actual.</p></section>}
       <p className="audit-note">Sesión de plataforma: {profile.displayName}. Las altas e invitaciones quedan en auditoría.</p>

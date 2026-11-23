@@ -13,6 +13,9 @@ function makeApi(profile: unknown) {
     createStore: vi.fn().mockResolvedValue({ id: 'store-1', name: 'Bodega Nueva' }),
     deactivateStore: vi.fn().mockResolvedValue({ id: 'store-1', active: false }),
     createInvitation: vi.fn().mockResolvedValue({ id: 'invitation-1', token: 'one-time-token' }),
+    listPlatformUsers: vi.fn().mockResolvedValue([]),
+    listInvitations: vi.fn().mockResolvedValue([]),
+    revokeInvitation: vi.fn().mockResolvedValue({ id: 'invitation-1', status: 'REVOKED' }),
     listClients: vi.fn().mockResolvedValue([{
       id: 'client-1',
       documentType: 'DNI',
@@ -301,6 +304,50 @@ describe('App por roles', () => {
     fireEvent.change(screen.getByLabelText(/razón social/i), { target: { value: 'Bodega Nueva SAC' } });
     fireEvent.click(screen.getByRole('button', { name: /guardar tienda/i }));
     await waitFor(() => expect(api.createStore).toHaveBeenCalledWith(expect.objectContaining({ taxId: '20123456780' })));
+  });
+
+  it('shows platform users, roles and invitation history in user management', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Plataforma', platformRole: 'PLATFORM_ADMIN', storeAccesses: [] });
+    api.listStores.mockResolvedValue([{ id: 'store-1', name: 'Comercial Demo', active: true }]);
+    api.listPlatformUsers.mockResolvedValue([{
+      id: 'business-admin-1',
+      username: 'administradora.demo',
+      email: 'administradora@credicuenta.test',
+      displayName: 'Administradora Demo',
+      platformRole: 'USER',
+      active: true,
+      createdAt: '2026-11-20T15:30:00.000Z',
+      storeAccesses: [{
+        storeId: 'store-1',
+        storeName: 'Comercial Demo',
+        role: 'STORE_ADMIN',
+        active: true,
+      }],
+    }]);
+    api.listInvitations.mockResolvedValue([{
+      id: 'invitation-pending',
+      email: 'pendiente@credicuenta.test',
+      platformRole: 'USER',
+      storeRole: 'STORE_ADMIN',
+      status: 'PENDING',
+      expiresAt: '2026-11-30T15:30:00.000Z',
+      acceptedAt: null,
+      createdAt: '2026-11-23T15:30:00.000Z',
+      store: { id: 'store-1', name: 'Comercial Demo' },
+      issuedBy: { id: 'admin-1', displayName: 'Admin Plataforma' },
+    }]);
+    render(<App api={api as never} />);
+    await login();
+    const navigation = await screen.findByRole('navigation', { name: /secciones/i });
+
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Gestión de usuarios' }));
+
+    const usersTable = await screen.findByRole('table', { name: /usuarios de plataforma/i });
+    expect(within(usersTable).getByText('Administradora Demo')).toBeVisible();
+    expect(within(usersTable).getByText(/Comercial Demo · Administrador del negocio · Activo/)).toBeVisible();
+    const invitationsTable = screen.getByRole('table', { name: /historial de invitaciones/i });
+    expect(within(invitationsTable).getByText('pendiente@credicuenta.test')).toBeVisible();
+    expect(within(invitationsTable).getByText('Pendiente')).toBeVisible();
   });
 
   it('shows a one-time activation link after creating a business administrator invitation', async () => {
