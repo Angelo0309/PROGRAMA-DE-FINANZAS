@@ -1,4 +1,5 @@
 import type { CanActivate, ExecutionContext, INestApplication } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,6 +29,13 @@ describe('portal controllers', () => {
       token: 'plain-token-returned-once',
       expiresAt: '2026-11-01T00:00:00.000Z',
     }),
+    listUsers: vi.fn().mockResolvedValue([{
+      id: 'user-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [],
+    }]),
+    listInvitations: vi.fn().mockResolvedValue([{
+      id: 'invitation-1', email: 'nuevo@example.com', status: 'PENDING',
+    }]),
+    revokeInvitation: vi.fn().mockResolvedValue({ id: 'invitation-1', status: 'REVOKED' }),
     deactivateStore: vi.fn().mockResolvedValue({ id: 'store-1', active: false }),
     listAudit: vi.fn().mockResolvedValue([]),
     getMyAccounts: vi.fn().mockResolvedValue([{ id: 'account-1' }]),
@@ -78,6 +86,37 @@ describe('portal controllers', () => {
       expect.anything(),
       'platform-admin-1',
     );
+  });
+
+  it('lists platform users and invitation history', async () => {
+    const users = await request(app.getHttpServer())
+      .get('/api/v1/platform/users')
+      .expect(200);
+    const invitations = await request(app.getHttpServer())
+      .get('/api/v1/platform/invitations')
+      .expect(200);
+
+    expect(users.body).toEqual([expect.objectContaining({ id: 'user-1' })]);
+    expect(invitations.body).toEqual([expect.objectContaining({ status: 'PENDING' })]);
+  });
+
+  it('revokes an invitation as the authenticated platform administrator', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/platform/invitations/invitation-1/revoke')
+      .expect(200);
+
+    expect(response.body).toEqual({ id: 'invitation-1', status: 'REVOKED' });
+    expect(service.revokeInvitation).toHaveBeenCalledWith(
+      'invitation-1',
+      'platform-admin-1',
+    );
+  });
+
+  it('protects every platform route with access-token and platform-admin guards', () => {
+    expect(Reflect.getMetadata(GUARDS_METADATA, PlatformController)).toEqual([
+      JwtAccessGuard,
+      PlatformAdminGuard,
+    ]);
   });
 
   it('derives client portal ownership from the authenticated user', async () => {

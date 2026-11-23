@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Inject,
   Param,
   Post,
@@ -104,6 +105,25 @@ export class PlatformController {
       },
       request.user.sub,
     );
+  }
+
+  @Get('users')
+  listUsers() {
+    return this.service.listUsers();
+  }
+
+  @Get('invitations')
+  listInvitations() {
+    return this.service.listInvitations();
+  }
+
+  @Post('invitations/:invitationId/revoke')
+  @HttpCode(200)
+  revokeInvitation(
+    @Param('invitationId') invitationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.service.revokeInvitation(invitationId, request.user.sub);
   }
 
   @Get('audit')

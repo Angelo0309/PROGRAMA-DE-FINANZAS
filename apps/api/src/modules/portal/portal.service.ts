@@ -1,6 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service.js';
 
@@ -151,6 +156,105 @@ export class PortalService {
       token,
       expiresAt: invitation.expiresAt.toISOString(),
     };
+  }
+
+  async listUsers() {
+    const users = await this.prisma.user.findMany({
+      orderBy: { displayName: 'asc' },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        displayName: true,
+        platformRole: true,
+        active: true,
+        createdAt: true,
+        passwordHash: false,
+        accesses: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            storeId: true,
+            role: true,
+            active: true,
+            store: { select: { name: true } },
+          },
+        },
+      },
+    });
+    return users.map((user) => ({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      displayName: user.displayName,
+      platformRole: user.platformRole,
+      active: user.active,
+      createdAt: user.createdAt.toISOString(),
+      storeAccesses: user.accesses.map((access) => ({
+        storeId: access.storeId,
+        storeName: access.store.name,
+        role: access.role,
+        active: access.active,
+      })),
+    }));
+  }
+
+  async listInvitations(now = new Date()) {
+    const invitations = await this.prisma.userInvitation.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        platformRole: true,
+        storeRole: true,
+        status: true,
+        expiresAt: true,
+        acceptedAt: true,
+        createdAt: true,
+        tokenHash: false,
+        store: { select: { id: true, name: true } },
+        issuedBy: { select: { id: true, displayName: true } },
+      },
+    });
+    return invitations.map((invitation) => ({
+      id: invitation.id,
+      email: invitation.email,
+      platformRole: invitation.platformRole,
+      storeRole: invitation.storeRole,
+      status: invitation.status === 'PENDING' && invitation.expiresAt <= now
+        ? 'EXPIRED' as const
+        : invitation.status,
+      expiresAt: invitation.expiresAt.toISOString(),
+      acceptedAt: invitation.acceptedAt?.toISOString() ?? null,
+      createdAt: invitation.createdAt.toISOString(),
+      store: invitation.store,
+      issuedBy: invitation.issuedBy,
+    }));
+  }
+
+  revokeInvitation(invitationId: string, actorId: string, now = new Date()) {
+    return this.prisma.$transaction(async (transaction) => {
+      const result = await transaction.userInvitation.updateMany({
+        where: { id: invitationId, status: 'PENDING', expiresAt: { gt: now } },
+        data: { status: 'REVOKED' },
+      });
+      if (result.count === 0) {
+        throw new BadRequestException('La invitación ya no puede revocarse.');
+      }
+      const invitation = await transaction.userInvitation.findUniqueOrThrow({
+        where: { id: invitationId },
+        select: { storeId: true },
+      });
+      await transaction.auditEvent.create({
+        data: {
+          userId: actorId,
+          storeId: invitation.storeId,
+          event: 'USER_INVITATION_REVOKED',
+          entity: 'INVITACION_USUARIO',
+          entityId: invitationId,
+        },
+      });
+      return { id: invitationId, status: 'REVOKED' as const };
+    });
   }
 
   async listAudit(storeId?: string) {

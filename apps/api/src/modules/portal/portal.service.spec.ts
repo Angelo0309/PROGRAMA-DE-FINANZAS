@@ -62,6 +62,137 @@ describe('PortalService logical deactivation', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it('lists platform users with every store role and without authentication secrets', async () => {
+    const findMany = vi.fn().mockResolvedValue([{
+      id: 'user-1',
+      username: 'admin.negocio',
+      email: 'admin@example.com',
+      displayName: 'Administradora Demo',
+      platformRole: 'USER',
+      active: true,
+      createdAt: new Date('2026-11-01T10:00:00.000Z'),
+      passwordHash: 'must-never-leave-the-api',
+      accesses: [
+        { storeId: 'store-1', role: 'STORE_ADMIN', active: true, store: { name: 'Bodega Norte' } },
+        { storeId: 'store-2', role: 'OPERATOR', active: false, store: { name: 'Bodega Sur' } },
+      ],
+    }]);
+    const service = new PortalService({ user: { findMany } } as unknown as PrismaService);
+
+    const users = await service.listUsers();
+
+    expect(users).toEqual([{
+      id: 'user-1',
+      username: 'admin.negocio',
+      email: 'admin@example.com',
+      displayName: 'Administradora Demo',
+      platformRole: 'USER',
+      active: true,
+      createdAt: '2026-11-01T10:00:00.000Z',
+      storeAccesses: [
+        { storeId: 'store-1', storeName: 'Bodega Norte', role: 'STORE_ADMIN', active: true },
+        { storeId: 'store-2', storeName: 'Bodega Sur', role: 'OPERATOR', active: false },
+      ],
+    }]);
+    expect(users[0]).not.toHaveProperty('passwordHash');
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: { displayName: 'asc' },
+      select: expect.objectContaining({
+        passwordHash: false,
+        accesses: expect.objectContaining({
+          orderBy: { createdAt: 'asc' },
+        }),
+      }),
+    }));
+  });
+
+  it('lists invitation history with an effective expired status and no token hash', async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: 'invitation-expired', email: 'expired@example.com', platformRole: 'USER',
+        storeRole: 'STORE_ADMIN', status: 'PENDING',
+        expiresAt: new Date('2026-11-22T23:59:59.000Z'), acceptedAt: null,
+        createdAt: new Date('2026-11-20T10:00:00.000Z'),
+        store: { id: 'store-1', name: 'Bodega Norte' },
+        issuedBy: { id: 'admin-1', displayName: 'Admin Plataforma' },
+        tokenHash: 'must-never-leave-the-api',
+      },
+      {
+        id: 'invitation-used', email: 'used@example.com', platformRole: 'USER',
+        storeRole: 'OPERATOR', status: 'ACCEPTED',
+        expiresAt: new Date('2026-11-30T00:00:00.000Z'),
+        acceptedAt: new Date('2026-11-21T12:00:00.000Z'),
+        createdAt: new Date('2026-11-20T11:00:00.000Z'),
+        store: { id: 'store-1', name: 'Bodega Norte' },
+        issuedBy: { id: 'admin-1', displayName: 'Admin Plataforma' },
+      },
+    ]);
+    const service = new PortalService({ userInvitation: { findMany } } as unknown as PrismaService);
+
+    const invitations = await service.listInvitations(new Date('2026-11-23T10:00:00.000Z'));
+
+    expect(invitations).toEqual([
+      expect.objectContaining({ id: 'invitation-expired', status: 'EXPIRED' }),
+      expect.objectContaining({
+        id: 'invitation-used', status: 'ACCEPTED', acceptedAt: '2026-11-21T12:00:00.000Z',
+      }),
+    ]);
+    expect(invitations[0]).not.toHaveProperty('tokenHash');
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: { createdAt: 'desc' },
+      select: expect.objectContaining({ tokenHash: false }),
+    }));
+  });
+
+  it('revokes a current pending invitation and records the actor in audit', async () => {
+    const now = new Date('2026-11-23T10:00:00.000Z');
+    const transaction = {
+      userInvitation: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ storeId: 'store-1' }),
+      },
+      auditEvent: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (work: (client: typeof transaction) => unknown) => work(transaction)),
+    } as unknown as PrismaService;
+    const service = new PortalService(prisma);
+
+    await expect(service.revokeInvitation('invitation-1', 'platform-admin-1', now)).resolves.toEqual({
+      id: 'invitation-1', status: 'REVOKED',
+    });
+    expect(transaction.userInvitation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'invitation-1', status: 'PENDING', expiresAt: { gt: now } },
+      data: { status: 'REVOKED' },
+    });
+    expect(transaction.auditEvent.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'platform-admin-1', storeId: 'store-1', event: 'USER_INVITATION_REVOKED',
+        entity: 'INVITACION_USUARIO', entityId: 'invitation-1',
+      },
+    });
+  });
+
+  it('rejects revocation when the invitation is not pending and unexpired', async () => {
+    const transaction = {
+      userInvitation: {
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        findUniqueOrThrow: vi.fn(),
+      },
+      auditEvent: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (work: (client: typeof transaction) => unknown) => work(transaction)),
+    } as unknown as PrismaService;
+    const service = new PortalService(prisma);
+
+    await expect(service.revokeInvitation(
+      'invitation-used', 'platform-admin-1', new Date('2026-11-23T10:00:00.000Z'),
+    )).rejects.toThrow('La invitación ya no puede revocarse.');
+    expect(transaction.userInvitation.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(transaction.auditEvent.create).not.toHaveBeenCalled();
+  });
+
   it('returns purchase items with each current product image URL', async () => {
     const decimal = (value: string) => ({
       toFixed: (places: number) => Number(value).toFixed(places),
