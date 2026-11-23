@@ -227,4 +227,3 @@ Expected: únicamente `humanizar_articulo.py` sin seguimiento; ningún archivo d
 - [ ] **Step 5: Publicar la rama y abrir Pull Request hacia `main`**
 
 No fusionar hasta que las verificaciones locales y GitHub Actions estén verdes.
-

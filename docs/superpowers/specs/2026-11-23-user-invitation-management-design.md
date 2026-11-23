@@ -1,6 +1,6 @@
 # Diseño: gestión de usuarios e invitaciones
 
-**Fecha:** 2026-11-23  
+**Fecha:** 2026-11-23
 **Rama:** `feature/user-invitation-management`
 
 ## Intención
@@ -65,4 +65,3 @@ Completar la responsabilidad del integrante 5 para que el administrador de plata
 - Pruebas del componente para listas, estados, creación, copia y revocación.
 - Prueba de integración en `app.spec.tsx`.
 - `lint`, comprobación de tipos, pruebas completas, compilación y pruebas locales de integración/despliegue.
-
