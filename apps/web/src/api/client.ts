@@ -3,6 +3,16 @@ import type { components } from './schema';
 export type TokenPair = components['schemas']['TokenPair'];
 export type StoreAccess = components['schemas']['StoreAccess'];
 export type Profile = components['schemas']['Profile'];
+export type InvitationStatus = components['schemas']['InvitationStatus'];
+export type PlatformUserView = components['schemas']['PlatformUser'];
+export type PlatformInvitationView = components['schemas']['PlatformInvitation'];
+export type InvitationRevocationView = components['schemas']['InvitationRevocation'];
+
+export interface PlatformStoreView {
+  id: string;
+  name: string;
+  active: boolean;
+}
 
 export interface AccountView {
   id: string;
@@ -166,7 +176,7 @@ export interface ApiClient {
   }): Promise<TokenPair>;
   login(input: { identifier: string; password: string }): Promise<TokenPair>;
   getProfile(): Promise<Profile>;
-  listStores(): Promise<Array<{ id: string; name: string; active: boolean }>>;
+  listStores(): Promise<PlatformStoreView[]>;
   createStore(input: {
     taxId: string;
     name: string;
@@ -182,6 +192,9 @@ export interface ApiClient {
     storeRole?: 'STORE_ADMIN' | 'OPERATOR' | 'CLIENT';
     expiresAt: string;
   }): Promise<{ id: string; token: string; expiresAt?: string }>;
+  listPlatformUsers(): Promise<PlatformUserView[]>;
+  listInvitations(): Promise<PlatformInvitationView[]>;
+  revokeInvitation(invitationId: string): Promise<InvitationRevocationView>;
   listAudit(): Promise<Array<{ id: string; event: string; createdAt: string }>>;
   listClients(storeId: string): Promise<ClientView[]>;
   createClient(storeId: string, input: CreateClientInput): Promise<ClientView>;
@@ -276,7 +289,7 @@ class HttpApiClient implements ApiClient {
   }
 
   listStores() {
-    return this.request<Array<{ id: string; name: string; active: boolean }>>(
+    return this.request<PlatformStoreView[]>(
       '/platform/stores',
     );
   }
@@ -298,6 +311,21 @@ class HttpApiClient implements ApiClient {
     return this.request<{ id: string; token: string; expiresAt?: string }>(
       '/platform/invitations',
       { method: 'POST', body: JSON.stringify(input) },
+    );
+  }
+
+  listPlatformUsers() {
+    return this.request<PlatformUserView[]>('/platform/users');
+  }
+
+  listInvitations() {
+    return this.request<PlatformInvitationView[]>('/platform/invitations');
+  }
+
+  revokeInvitation(invitationId: string) {
+    return this.request<InvitationRevocationView>(
+      `/platform/invitations/${invitationId}/revoke`,
+      { method: 'POST' },
     );
   }
 

@@ -75,9 +75,41 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["listInvitations"];
         put?: never;
         post: operations["createInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/invitations/{invitationId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revokeInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPlatformUsers"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -424,6 +456,63 @@ export interface components {
             platformRole: "PLATFORM_ADMIN" | "USER";
             storeAccesses: components["schemas"]["StoreAccess"][];
         };
+        /** @enum {string} */
+        InvitationStatus: "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
+        PlatformStoreAccess: {
+            /** Format: uuid */
+            storeId: string;
+            storeName: string;
+            /** @enum {string} */
+            role: "STORE_ADMIN" | "OPERATOR" | "CLIENT";
+            active: boolean;
+        };
+        PlatformUser: {
+            /** Format: uuid */
+            id: string;
+            username: string;
+            /** Format: email */
+            email: string;
+            displayName: string;
+            /** @enum {string} */
+            platformRole: "PLATFORM_ADMIN" | "USER";
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            storeAccesses: components["schemas"]["PlatformStoreAccess"][];
+        };
+        InvitationStore: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        InvitationIssuer: {
+            /** Format: uuid */
+            id: string;
+            displayName: string;
+        };
+        PlatformInvitation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: email */
+            email: string;
+            /** @enum {string} */
+            platformRole: "PLATFORM_ADMIN" | "USER";
+            storeRole: ("STORE_ADMIN" | "OPERATOR" | "CLIENT") | null;
+            status: components["schemas"]["InvitationStatus"];
+            /** Format: date-time */
+            expiresAt: string;
+            acceptedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            store: components["schemas"]["InvitationStore"] | null;
+            issuedBy: components["schemas"]["InvitationIssuer"];
+        };
+        InvitationRevocation: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            status: "REVOKED";
+        };
         PaymentInput: {
             /** Format: uuid */
             storeId: string;
@@ -636,6 +725,26 @@ export interface operations {
             };
         };
     };
+    listInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Historial de invitaciones sin tokens */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformInvitation"][];
+                };
+            };
+        };
+    };
     createInvitation: {
         parameters: {
             query?: never;
@@ -651,6 +760,55 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    revokeInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitacion pendiente revocada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationRevocation"];
+                };
+            };
+            /** @description La invitacion ya no puede revocarse */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listPlatformUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usuarios y roles de plataforma y tiendas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformUser"][];
+                };
             };
         };
     };

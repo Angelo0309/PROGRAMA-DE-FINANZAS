@@ -66,11 +66,53 @@ paths:
         "200": { description: Tienda desactivada logicamente }
         "404": { description: Tienda activa no encontrada }
   /platform/invitations:
+    get:
+      operationId: listInvitations
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Historial de invitaciones sin tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformInvitation"
     post:
       operationId: createInvitation
       security: [{ bearerAuth: [] }]
       responses:
         "201": { description: Invitacion creada; token visible una sola vez }
+  /platform/invitations/{invitationId}/revoke:
+    post:
+      operationId: revokeInvitation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: invitationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Invitacion pendiente revocada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationRevocation"
+        "400": { description: La invitacion ya no puede revocarse }
+  /platform/users:
+    get:
+      operationId: listPlatformUsers
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Usuarios y roles de plataforma y tiendas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformUser"
   /platform/audit:
     get:
       operationId: listAudit
@@ -364,6 +406,85 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/StoreAccess"
+    InvitationStatus:
+      type: string
+      enum: [PENDING, ACCEPTED, EXPIRED, REVOKED]
+    PlatformStoreAccess:
+      type: object
+      required: [storeId, storeName, role, active]
+      properties:
+        storeId: { type: string, format: uuid }
+        storeName: { type: string }
+        role:
+          type: string
+          enum: [STORE_ADMIN, OPERATOR, CLIENT]
+        active: { type: boolean }
+    PlatformUser:
+      type: object
+      required: [id, username, email, displayName, platformRole, active, createdAt, storeAccesses]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        platformRole:
+          type: string
+          enum: [PLATFORM_ADMIN, USER]
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        storeAccesses:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformStoreAccess"
+    InvitationStore:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    InvitationIssuer:
+      type: object
+      required: [id, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+    PlatformInvitation:
+      type: object
+      required: [id, email, platformRole, storeRole, status, expiresAt, acceptedAt, createdAt, store, issuedBy]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        platformRole:
+          type: string
+          enum: [PLATFORM_ADMIN, USER]
+        storeRole:
+          oneOf:
+            - type: string
+              enum: [STORE_ADMIN, OPERATOR, CLIENT]
+            - type: "null"
+        status:
+          $ref: "#/components/schemas/InvitationStatus"
+        expiresAt: { type: string, format: date-time }
+        acceptedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        createdAt: { type: string, format: date-time }
+        store:
+          oneOf:
+            - $ref: "#/components/schemas/InvitationStore"
+            - type: "null"
+        issuedBy:
+          $ref: "#/components/schemas/InvitationIssuer"
+    InvitationRevocation:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          const: REVOKED
     PaymentInput:
       type: object
       required: [storeId, paidAt, currency, amount]
