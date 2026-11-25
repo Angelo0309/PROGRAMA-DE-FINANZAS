@@ -10,7 +10,7 @@ import type {
 
 const roleLabels = {
   PLATFORM_ADMIN: 'Administrador de plataforma',
-  USER: 'Usuario',
+  USER: 'Usuario de plataforma',
   STORE_ADMIN: 'Administrador del negocio',
   OPERATOR: 'Operador',
   CLIENT: 'Cliente',
@@ -22,6 +22,9 @@ const statusLabels: Record<InvitationStatus, string> = {
   EXPIRED: 'Vencida',
   REVOKED: 'Revocada',
 };
+
+const countLabel = (count: number, singular: string, plural: string) =>
+  `${count} ${count === 1 ? singular : plural}`;
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('es-PE', {
@@ -170,7 +173,7 @@ export function PlatformAccessManagement({
       <section className="paper-section">
         <div className="section-title">
           <div><p className="folio">PLATAFORMA · USUARIOS</p><h2>Usuarios y roles</h2></div>
-          <span>{users.length} usuarios</span>
+          <span>{countLabel(users.length, 'usuario', 'usuarios')}</span>
         </div>
         {users.length === 0 ? (
           <p className="empty-state">Aún no hay usuarios para mostrar.</p>
@@ -201,7 +204,7 @@ export function PlatformAccessManagement({
       <section className="paper-section">
         <div className="section-title">
           <div><p className="folio">ACCESOS · HISTORIAL</p><h2>Invitaciones</h2></div>
-          <span>{invitations.length} invitaciones</span>
+          <span>{countLabel(invitations.length, 'invitación', 'invitaciones')}</span>
         </div>
         {invitations.length === 0 ? (
           <p className="empty-state">Aún no hay invitaciones para mostrar.</p>

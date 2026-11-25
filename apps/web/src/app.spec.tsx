@@ -795,6 +795,18 @@ describe('App por roles', () => {
     expect(within(screen.getByRole('table', { name: /estados de cuenta emitidos/i })).getByText('S/ 255.80')).toBeVisible();
   });
 
+  it('uses the singular label for one issued account statement', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    const [statement] = await api.getStatements('account-1', 'store-1');
+    api.getStatements.mockResolvedValue([statement]);
+    render(<App api={api as never} />);
+    await login();
+    fireEvent.click(within(await screen.findByRole('navigation', { name: /secciones/i })).getByRole('button', { name: 'Reporte de corte' }));
+    fireEvent.change(screen.getByLabelText(/cuenta del cliente/i), { target: { value: 'account-1' } });
+
+    expect(await screen.findByText('1 estado')).toBeVisible();
+  });
+
   it('ignores a late cut report response after switching accounts', async () => {
     let finishFirst: ((value: unknown[]) => void) | undefined;
     const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });

@@ -95,6 +95,21 @@ describe('PlatformAccessManagement', () => {
     expect(within(invitationTable).getByText('Revocada')).toBeVisible();
   });
 
+  it('uses clear role names and singular counters', async () => {
+    const api = makeApi();
+    vi.mocked(api.listPlatformUsers).mockResolvedValue([users[1]!]);
+    vi.mocked(api.listInvitations).mockResolvedValue([invitations[0]!]);
+    render(<PlatformAccessManagement
+      api={api}
+      stores={[{ id: 'store-1', name: 'Bodega Norte', active: true }]}
+    />);
+
+    const userTable = await screen.findByRole('table', { name: /usuarios de plataforma/i });
+    expect(screen.getByText('1 usuario')).toBeVisible();
+    expect(screen.getByText('1 invitación')).toBeVisible();
+    expect(within(userTable).getByText('Usuario de plataforma')).toBeVisible();
+  });
+
   it('creates an invitation, exposes its one-time activation link and refreshes history', async () => {
     const api = makeApi();
     vi.mocked(api.listInvitations)

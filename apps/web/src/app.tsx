@@ -123,6 +123,9 @@ const obligationStatus = (status: string) => ({
   PENDING: { label: 'Pendiente', tone: 'pending' },
 }[status] ?? { label: status, tone: 'pending' });
 
+const countLabel = (count: number, singular: string, plural: string) =>
+  `${count} ${count === 1 ? singular : plural}`;
+
 const platformNavigation = [
   'Dashboard',
   'Gestión de tiendas',
@@ -893,7 +896,7 @@ function ClientManagement({
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
-        <span className="catalog-count">{filteredClients.length} de {clients.length} clientes</span>
+        <span className="catalog-count">{filteredClients.length} de {countLabel(clients.length, 'cliente', 'clientes')}</span>
       </div>
 
       <section className="metric-strip product-metrics" aria-label="Indicadores de clientes">
@@ -1487,7 +1490,7 @@ function PaymentPlans({ api, access, accounts }: { api: ApiClient; access: Store
     <section className="schedule-page">
       <div className="page-lead"><p>Consulta el plan francés y las obligaciones calculadas por el motor financiero.</p></div>
       <section className="schedule-selector">
-        <div><label htmlFor="schedule-account">Cuenta del cliente</label><select id="schedule-account" value={accountId} onChange={(event) => { setSelectedPurchaseId('all'); setAccountId(event.target.value); }}><option value="">Seleccione una cuenta</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.customerName} · {account.accountNumber}</option>)}</select></div>
+        <div><label htmlFor="schedule-account">Cuenta del cliente</label><select id="schedule-account" value={accountId} onChange={(event) => { setSelectedPurchaseId('all'); setAccountId(event.target.value); }}><option value="">Seleccione una cuenta</option>{accounts.map((account) => <option key={account.id} title={`${account.accountNumber} · ${account.customerName}`} value={account.id}>{account.accountNumber} · {account.customerName}</option>)}</select></div>
         {plans.length > 0 && <div><label htmlFor="schedule-plan">Plan de pago</label><select id="schedule-plan" value={selectedPurchaseId} onChange={(event) => setSelectedPurchaseId(event.target.value)}><option value="all">Todos los planes</option>{plans.map((plan) => <option key={plan.purchaseId} value={plan.purchaseId}>{purchasePlanLabel(plan.purchasedAt, plan.purchaseId)}</option>)}</select></div>}
       </section>
 
@@ -1502,7 +1505,7 @@ function PaymentPlans({ api, access, accounts }: { api: ApiClient; access: Store
 
       {error && <Alert severity="error">{error}</Alert>}
       <section className="catalog-panel schedule-panel" aria-labelledby="schedule-title">
-        <div className="catalog-panel-heading"><div><p className="folio">CRONOGRAMA OFICIAL</p><h2 id="schedule-title">Plan de pagos</h2>{selectedPlan && <p className="schedule-plan-title">{purchasePlanLabel(selectedPlan.purchasedAt, selectedPlan.purchaseId)}</p>}</div><span>{loading ? 'Consultando…' : `${visibleSchedule.length} obligaciones`}</span></div>
+        <div className="catalog-panel-heading"><div><p className="folio">CRONOGRAMA OFICIAL</p><h2 id="schedule-title">Plan de pagos</h2>{selectedPlan && <p className="schedule-plan-title">{purchasePlanLabel(selectedPlan.purchasedAt, selectedPlan.purchaseId)}</p>}</div><span>{loading ? 'Consultando…' : countLabel(visibleSchedule.length, 'obligación', 'obligaciones')}</span></div>
         {!accountId ? <p className="empty-state schedule-empty">Seleccione una cuenta para consultar su cronograma.</p> : loading ? <div className="schedule-loading"><CircularProgress size={24} /><span>Consultando obligaciones…</span></div> : schedule.length === 0 ? <p className="empty-state schedule-empty">La cuenta no tiene obligaciones en cuotas.</p> : (
           <div className="table-wrapper"><table className="schedule-table" aria-label="Cronograma de pagos"><thead><tr>{selectedPurchaseId === 'all' && <th>Plan</th>}<th>Cuota</th><th>Vencimiento</th><th>Saldo inicial</th><th>Interés</th><th>Capital</th><th>Importe exigible</th><th>Pagado</th><th>Estado</th></tr></thead><tbody>{visibleSchedule.map((item) => { const status = obligationStatus(item.status); return <tr key={item.id}>{selectedPurchaseId === 'all' && <td>{purchasePlanLabel(item.purchasedAt, item.purchaseId)}</td>}<td>{item.installmentNumber}</td><td>{commercialDate(item.dueDate)}</td><td>{money(item.currency, item.openingBalance)}</td><td>{money(item.currency, item.compensatoryInterest)}</td><td>{money(item.currency, item.principalDue)}</td><td className="money-cell">{money(item.currency, item.amountDue)}</td><td>{money(item.currency, item.paidAmount)}</td><td><span className={`status-pill ${status.tone}`}>{status.label}</span></td></tr>; })}</tbody></table></div>
         )}
@@ -1601,7 +1604,7 @@ function PaymentRegistration({
         <label htmlFor="payment-account">Cuenta del cliente</label>
         <select id="payment-account" value={accountId} onChange={(event) => setAccountId(event.target.value)}>
           <option value="">Seleccione una cuenta</option>
-          {accounts.map((account) => <option key={account.id} value={account.id}>{account.customerName} · {account.accountNumber}</option>)}
+          {accounts.map((account) => <option key={account.id} title={`${account.accountNumber} · ${account.customerName}`} value={account.id}>{account.accountNumber} · {account.customerName}</option>)}
         </select>
       </section>
 
@@ -1622,7 +1625,7 @@ function PaymentRegistration({
             </button>
           </section>
           <section className="catalog-panel payment-breakdown" aria-labelledby="payment-breakdown-title">
-            <div className="catalog-panel-heading"><div><p className="folio">APLICACIÓN DEL PAGO</p><h2 id="payment-breakdown-title">Obligaciones exigibles</h2></div><span>{quote.obligations.length} obligaciones</span></div>
+            <div className="catalog-panel-heading"><div><p className="folio">APLICACIÓN DEL PAGO</p><h2 id="payment-breakdown-title">Obligaciones exigibles</h2></div><span>{countLabel(quote.obligations.length, 'obligación', 'obligaciones')}</span></div>
             {quote.obligations.length === 0 ? <p className="empty-state schedule-empty">Esta cuenta no tiene obligaciones exigibles para pagar hoy.</p> : (
               <div className="table-wrapper"><table aria-label="Detalle del pago"><thead><tr><th>Vencimiento</th><th>Días de mora</th><th>Mora</th><th>Interés</th><th>Capital</th></tr></thead><tbody>{quote.obligations.map((item) => <tr key={item.id}><td>{commercialDate(item.dueDate)}</td><td>{item.lateDays}</td><td>{money(quote.currency, item.lateInterest)}</td><td>{money(quote.currency, item.compensatoryInterest)}</td><td className="money-cell">{money(quote.currency, item.principal)}</td></tr>)}</tbody></table></div>
             )}
@@ -1686,7 +1689,7 @@ function CutReports({ api, access, accounts }: { api: ApiClient; access: StoreAc
         <label htmlFor="statement-account">Cuenta del cliente</label>
         <select id="statement-account" value={accountId} onChange={(event) => setAccountId(event.target.value)}>
           <option value="">Seleccione una cuenta</option>
-          {accounts.map((account) => <option key={account.id} value={account.id}>{account.customerName} · {account.accountNumber}</option>)}
+          {accounts.map((account) => <option key={account.id} title={`${account.accountNumber} · ${account.customerName}`} value={account.id}>{account.accountNumber} · {account.customerName}</option>)}
         </select>
       </section>
 
@@ -1701,7 +1704,7 @@ function CutReports({ api, access, accounts }: { api: ApiClient; access: StoreAc
 
       {error && <Alert severity="error">{error}</Alert>}
       <section className="catalog-panel statement-panel" aria-labelledby="statement-title">
-        <div className="catalog-panel-heading"><div><p className="folio">HISTORIAL DE CORTES</p><h2 id="statement-title">Estados de cuenta emitidos</h2></div><span>{loading ? 'Consultando…' : `${statements.length} estados`}</span></div>
+        <div className="catalog-panel-heading"><div><p className="folio">HISTORIAL DE CORTES</p><h2 id="statement-title">Estados de cuenta emitidos</h2></div><span>{loading ? 'Consultando…' : countLabel(statements.length, 'estado', 'estados')}</span></div>
         {!accountId ? <p className="empty-state statement-empty">Seleccione una cuenta para consultar sus cortes.</p> : loading ? <div className="schedule-loading"><CircularProgress size={24} /><span>Consultando estados de cuenta…</span></div> : statements.length === 0 ? <p className="empty-state statement-empty">Todavía no se han emitido estados para esta cuenta.</p> : (
           <div className="table-wrapper"><table className="statement-table" aria-label="Estados de cuenta emitidos"><thead><tr><th>Corte</th><th>Periodo</th><th>Vencimiento</th><th>Importe exigible</th><th>Estado</th></tr></thead><tbody>{statements.map((statement) => <tr key={statement.id}><td>{commercialInstantInLima(statement.cutAt)}</td><td>{commercialDate(statement.periodStart)} – {commercialDate(statement.periodEnd)}</td><td>{commercialDate(statement.dueDate)}</td><td className="money-cell">{officialMoney(statement.currency, statement.totalDue)}</td><td><span className="status-pill ready">Emitido</span></td></tr>)}</tbody></table></div>
         )}
