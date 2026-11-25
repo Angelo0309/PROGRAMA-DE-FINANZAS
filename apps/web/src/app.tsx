@@ -759,6 +759,10 @@ function ClientManagement({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showInvitationForm, setShowInvitationForm] = useState(false);
+  const [invitationEmail, setInvitationEmail] = useState('');
+  const [activationLink, setActivationLink] = useState('');
+  const [inviting, setInviting] = useState(false);
   const canManageClients = access.role === 'STORE_ADMIN';
   const filteredClients = clients.filter((client) => {
     const term = search.trim().toLocaleLowerCase('es-PE');
@@ -827,6 +831,39 @@ function ClientManagement({
       setError(reason instanceof Error ? reason.message : 'No fue posible guardar el cliente.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function inviteClient(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedClient || !invitationEmail.includes('@')) {
+      setError('Ingrese un correo válido para el acceso del cliente.');
+      return;
+    }
+    setInviting(true);
+    setError('');
+    try {
+      const created = await api.createClientInvitation(
+        access.storeId,
+        selectedClient.id,
+        {
+          email: invitationEmail.trim(),
+          expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        },
+      );
+      setClients((current) => current.map((client) => (
+        client.id === selectedClient.id
+          ? { ...client, hasPendingInvitation: true }
+          : client
+      )));
+      setActivationLink(
+        `${window.location.origin}/activar?token=${encodeURIComponent(created.token)}`,
+      );
+      setNotice('Invitación generada. Comparte el enlace una sola vez con el cliente.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'No fue posible invitar al cliente.');
+    } finally {
+      setInviting(false);
     }
   }
 
@@ -900,6 +937,38 @@ function ClientManagement({
                   <p>{selectedClient.documentType} {selectedClient.documentNumber}</p>
                 </div>
                 <div className="client-contact"><span>{selectedClient.phone || 'Sin teléfono'}</span><span>{selectedClient.address || 'Sin dirección'}</span></div>
+                <div className="client-access-panel">
+                  <strong>Acceso al portal</strong>
+                  {selectedClient.hasPortalAccess ? (
+                    <span className="status-badge">Activo</span>
+                  ) : selectedClient.hasPendingInvitation && !activationLink ? (
+                    <span className="status-badge warning">Invitación pendiente</span>
+                  ) : !showInvitationForm ? (
+                    <button className="secondary-button compact-button" type="button" onClick={() => setShowInvitationForm(true)}>
+                      Invitar al portal
+                    </button>
+                  ) : null}
+                  {showInvitationForm && !selectedClient.hasPortalAccess && (
+                    <form className="inline-form" onSubmit={inviteClient}>
+                      <label htmlFor="client-invitation-email">Correo para acceso</label>
+                      <input
+                        id="client-invitation-email"
+                        type="email"
+                        value={invitationEmail}
+                        onChange={(event) => setInvitationEmail(event.target.value)}
+                      />
+                      <button className="primary-button" type="submit" disabled={inviting || Boolean(activationLink)}>
+                        {inviting ? 'Generando…' : 'Generar invitación'}
+                      </button>
+                    </form>
+                  )}
+                  {activationLink && (
+                    <div className="invitation-link">
+                      <label htmlFor="client-activation-link">Enlace de activación</label>
+                      <input id="client-activation-link" readOnly value={activationLink} />
+                    </div>
+                  )}
+                </div>
                 <div className="selected-accounts">
                   {accountsFor(selectedClient).length === 0 ? (
                     <p className="empty-state">Este cliente todavía no tiene una cuenta de crédito activa.</p>

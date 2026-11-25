@@ -138,6 +138,28 @@ paths:
       responses:
         "200": { description: Cliente y cuentas activas desactivados logicamente }
         "404": { description: Cliente activo no encontrado }
+  /stores/{storeId}/clients/{clientId}/invitations:
+    post:
+      operationId: createClientInvitation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/storeId"
+        - $ref: "#/components/parameters/clientId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientInvitationInput"
+      responses:
+        "201":
+          description: Invitacion vinculada al cliente; token visible una sola vez
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientInvitationCreated"
+        "400": { description: El cliente ya tiene acceso o una invitacion vigente }
+        "404": { description: Cliente activo no encontrado }
   /stores/{storeId}/products:
     get:
       operationId: listProducts
@@ -364,6 +386,20 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    ClientInvitationInput:
+      type: object
+      required: [email, expiresAt]
+      properties:
+        email: { type: string, format: email }
+        expiresAt: { type: string, format: date-time }
+    ClientInvitationCreated:
+      type: object
+      required: [id, email, token, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        token: { type: string }
+        expiresAt: { type: string, format: date-time }
     DecimalString:
       type: string
       pattern: '^\\d+(?:\\.\\d+)?$'

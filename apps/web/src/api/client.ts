@@ -121,6 +121,8 @@ export interface ClientView {
   fullName: string;
   phone: string | null;
   address: string | null;
+  hasPortalAccess: boolean;
+  hasPendingInvitation: boolean;
 }
 
 export interface CreateClientInput {
@@ -198,6 +200,10 @@ export interface ApiClient {
   listAudit(): Promise<Array<{ id: string; event: string; createdAt: string }>>;
   listClients(storeId: string): Promise<ClientView[]>;
   createClient(storeId: string, input: CreateClientInput): Promise<ClientView>;
+  createClientInvitation(storeId: string, clientId: string, input: {
+    email: string;
+    expiresAt: string;
+  }): Promise<{ id: string; email: string; token: string; expiresAt: string }>;
   listProducts(storeId: string): Promise<ProductView[]>;
   createProduct(storeId: string, input: CreateProductInput): Promise<ProductView>;
   listAccounts(storeId: string): Promise<AccountView[]>;
@@ -344,6 +350,17 @@ class HttpApiClient implements ApiClient {
       method: 'POST',
       body: JSON.stringify(input),
     });
+  }
+
+  createClientInvitation(
+    storeId: string,
+    clientId: string,
+    input: Parameters<ApiClient['createClientInvitation']>[2],
+  ) {
+    return this.request<{ id: string; email: string; token: string; expiresAt: string }>(
+      `/stores/${storeId}/clients/${clientId}/invitations`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
   }
 
   listProducts(storeId: string) {

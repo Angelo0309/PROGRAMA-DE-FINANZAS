@@ -164,6 +164,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stores/{storeId}/clients/{clientId}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createClientInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stores/{storeId}/products": {
         parameters: {
             query?: never;
@@ -424,6 +440,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ClientInvitationInput: {
+            /** Format: email */
+            email: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ClientInvitationCreated: {
+            /** Format: uuid */
+            id: string;
+            /** Format: email */
+            email: string;
+            token: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
         /** @example 120.00 */
         DecimalString: string;
         LoginInput: {
@@ -864,6 +895,47 @@ export interface operations {
         responses: {
             /** @description Cliente y cuentas activas desactivados logicamente */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cliente activo no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createClientInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["storeId"];
+                clientId: components["parameters"]["clientId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientInvitationInput"];
+            };
+        };
+        responses: {
+            /** @description Invitacion vinculada al cliente; token visible una sola vez */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientInvitationCreated"];
+                };
+            };
+            /** @description El cliente ya tiene acceso o una invitacion vigente */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

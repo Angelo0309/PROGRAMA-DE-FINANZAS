@@ -31,6 +31,10 @@ const clientSchema = z.object({
   address: z.string().max(255).optional(),
   userId: z.string().optional(),
 });
+const clientInvitationSchema = z.object({
+  email: z.string().email().max(254),
+  expiresAt: z.string().datetime({ offset: true }),
+});
 const productSchema = z.object({
   sku: z.string().min(1).max(64),
   name: z.string().min(2).max(180),
@@ -119,6 +123,23 @@ export class BusinessController {
         ...(value.address === undefined ? {} : { address: value.address }),
         ...(value.userId === undefined ? {} : { userId: value.userId }),
       },
+      request.user.sub,
+    );
+  }
+
+  @Post('stores/:storeId/clients/:clientId/invitations')
+  @StoreRoles('STORE_ADMIN')
+  createClientInvitation(
+    @Param('storeId') storeId: string,
+    @Param('clientId') clientId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() body: unknown,
+  ) {
+    const value = parse(clientInvitationSchema, body);
+    return this.service.createClientInvitation(
+      storeId,
+      clientId,
+      value,
       request.user.sub,
     );
   }

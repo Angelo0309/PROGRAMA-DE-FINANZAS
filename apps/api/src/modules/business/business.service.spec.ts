@@ -3,6 +3,105 @@ import { describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../../database/prisma.service.js';
 import { BusinessService } from './business.service.js';
 
+describe('BusinessService client portal invitations', () => {
+  it('creates a one-time CLIENT invitation tied to the selected customer', async () => {
+    const transaction = {
+      customer: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'client-1', userId: null }),
+      },
+      user: { findUnique: vi.fn().mockResolvedValue(null) },
+      userInvitation: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({
+          id: 'invitation-1',
+          email: 'maria@example.com',
+          expiresAt: new Date('2026-12-02T15:00:00.000Z'),
+        }),
+      },
+      auditEvent: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (work: (client: typeof transaction) => unknown) => work(transaction)),
+    } as unknown as PrismaService;
+    const service = new BusinessService(prisma);
+
+    const result = await service.createClientInvitation(
+      'store-1',
+      'client-1',
+      { email: 'maria@example.com', expiresAt: '2026-12-02T10:00:00-05:00' },
+      'admin-1',
+      new Date('2026-11-25T15:00:00.000Z'),
+    );
+
+    expect(result).toEqual({
+      id: 'invitation-1',
+      email: 'maria@example.com',
+      token: expect.any(String),
+      expiresAt: '2026-12-02T15:00:00.000Z',
+    });
+    expect(transaction.userInvitation.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        customerId: 'client-1',
+        storeId: 'store-1',
+        storeRole: 'CLIENT',
+        platformRole: 'USER',
+        issuedById: 'admin-1',
+        tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+    });
+    expect(transaction.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        event: 'CLIENT_INVITATION_CREATED',
+        entityId: 'invitation-1',
+      }),
+    });
+  });
+
+  it('rejects an invitation when the customer already has portal access', async () => {
+    const transaction = {
+      customer: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'client-1', userId: 'user-1' }),
+      },
+      userInvitation: { findFirst: vi.fn(), create: vi.fn() },
+      auditEvent: { create: vi.fn() },
+    };
+    const service = new BusinessService({
+      $transaction: vi.fn(async (work: (client: typeof transaction) => unknown) => work(transaction)),
+    } as unknown as PrismaService);
+
+    await expect(service.createClientInvitation(
+      'store-1',
+      'client-1',
+      { email: 'maria@example.com', expiresAt: '2026-12-02T10:00:00-05:00' },
+      'admin-1',
+    )).rejects.toThrow('El cliente ya tiene acceso al portal.');
+    expect(transaction.userInvitation.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invitation email that already belongs to a registered user', async () => {
+    const transaction = {
+      customer: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'client-1', userId: null }),
+      },
+      user: { findUnique: vi.fn().mockResolvedValue({ id: 'another-user' }) },
+      userInvitation: { findFirst: vi.fn(), create: vi.fn() },
+      auditEvent: { create: vi.fn() },
+    };
+    const service = new BusinessService({
+      $transaction: vi.fn(async (work: (client: typeof transaction) => unknown) => work(transaction)),
+    } as unknown as PrismaService);
+
+    await expect(service.createClientInvitation(
+      'store-1',
+      'client-1',
+      { email: 'used@example.com', expiresAt: '2026-12-02T10:00:00-05:00' },
+      'admin-1',
+      new Date('2026-11-25T15:00:00.000Z'),
+    )).rejects.toThrow('El correo ya pertenece a un usuario registrado.');
+    expect(transaction.userInvitation.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('BusinessService logical deactivation', () => {
   it('deactivates a client and its active accounts in the same audited transaction', async () => {
     const transaction = {

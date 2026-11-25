@@ -123,6 +123,7 @@ model Customer {
   store          Store           @relation(fields: [storeId], references: [id])
   user           User?           @relation(fields: [userId], references: [id])
   accounts       CreditAccount[]
+  invitations    UserInvitation[] @relation("CustomerInvitations")
 
   @@id([id, storeId])
   @@unique([storeId, documentType, documentNumber])
@@ -404,6 +405,7 @@ model AuditEvent {
 model UserInvitation {
   id          String           @id @default(uuid()) @db.Char(36)
   storeId     String?          @map("tienda_id") @db.Char(36)
+  customerId  String?          @map("cliente_id") @db.Char(36)
   issuedById  String           @map("emitida_por_id") @db.Char(36)
   email       String           @map("correo") @db.VarChar(254)
   tokenHash   String           @unique @map("token_hash") @db.Char(64)
@@ -414,9 +416,11 @@ model UserInvitation {
   acceptedAt  DateTime?        @map("aceptada_en") @db.DateTime(3)
   createdAt   DateTime         @default(now()) @map("creado_en") @db.DateTime(3)
   store       Store?           @relation(fields: [storeId], references: [id])
+  customer    Customer?        @relation("CustomerInvitations", fields: [customerId, storeId], references: [id, storeId])
   issuedBy    User             @relation("InvitationIssuer", fields: [issuedById], references: [id])
 
   @@index([email, status])
+  @@index([customerId, status])
   @@map("INVITACION_USUARIO")
 }
 

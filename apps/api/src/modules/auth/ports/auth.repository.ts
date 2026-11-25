@@ -9,6 +9,7 @@ export interface PendingInvitation {
   platformRole: PlatformRole;
   storeId: string | null;
   storeRole: StoreRole | null;
+  customerId?: string | null;
   status: InvitationStatus;
   expiresAt: Date;
 }

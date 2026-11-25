@@ -23,6 +23,8 @@ function makeApi(profile: unknown) {
       fullName: 'Maria Demo',
       phone: '999111222',
       address: 'Lima',
+      hasPortalAccess: false,
+      hasPendingInvitation: false,
     }]),
     createClient: vi.fn().mockResolvedValue({
       id: 'client-2',
@@ -31,6 +33,14 @@ function makeApi(profile: unknown) {
       fullName: 'Ana Torres',
       phone: '988776655',
       address: 'San Miguel',
+      hasPortalAccess: false,
+      hasPendingInvitation: false,
+    }),
+    createClientInvitation: vi.fn().mockResolvedValue({
+      id: 'client-invitation-1',
+      email: 'maria@example.com',
+      token: 'client-one-time-token',
+      expiresAt: '2026-12-02T15:00:00.000Z',
     }),
     listProducts: vi.fn().mockResolvedValue([
       {
@@ -565,6 +575,29 @@ describe('App por roles', () => {
     }));
     expect(await screen.findByText('Cliente guardado correctamente.')).toBeVisible();
     expect(within(screen.getByRole('table', { name: 'Clientes y cuentas' })).getByRole('button', { name: 'Ana Torres' })).toBeVisible();
+  });
+
+  it('creates a portal invitation tied to the selected customer', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    render(<App api={api as never} />);
+    await login();
+    fireEvent.click(await screen.findByRole('button', { name: 'Clientes' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /invitar al portal/i }));
+    fireEvent.change(screen.getByLabelText(/correo para acceso/i), {
+      target: { value: 'maria@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generar invitación/i }));
+
+    await waitFor(() => expect(api.createClientInvitation).toHaveBeenCalledWith(
+      'store-1',
+      'client-1',
+      {
+        email: 'maria@example.com',
+        expiresAt: expect.any(String),
+      },
+    ));
+    expect(await screen.findByDisplayValue(/activar\?token=client-one-time-token/)).toBeVisible();
   });
 
   it('creates a credit account together with its initial financial condition', async () => {

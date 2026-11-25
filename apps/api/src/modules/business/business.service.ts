@@ -1,3 +1,5 @@
+import { createHash, randomBytes } from 'node:crypto';
+
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import { DateTime } from 'luxon';
@@ -10,7 +12,7 @@ export class BusinessService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async listClients(storeId: string) {
-    return this.prisma.customer.findMany({
+    const clients = await this.prisma.customer.findMany({
       where: { storeId, active: true },
       orderBy: { fullName: 'asc' },
       select: {
@@ -20,8 +22,19 @@ export class BusinessService {
         fullName: true,
         phone: true,
         address: true,
+        userId: true,
+        invitations: {
+          where: { status: 'PENDING', expiresAt: { gt: new Date() } },
+          select: { id: true },
+          take: 1,
+        },
       },
     });
+    return clients.map(({ userId, invitations, ...client }) => ({
+      ...client,
+      hasPortalAccess: userId !== null,
+      hasPendingInvitation: invitations.length > 0,
+    }));
   }
 
   async createClient(
@@ -46,6 +59,7 @@ export class BusinessService {
           fullName: true,
           phone: true,
           address: true,
+          userId: true,
         },
       });
       await transaction.auditEvent.create({
@@ -57,8 +71,89 @@ export class BusinessService {
           entityId: client.id,
         },
       });
-      return client;
+      const { userId, ...view } = client;
+      return {
+        ...view,
+        hasPortalAccess: userId !== null,
+        hasPendingInvitation: false,
+      };
     });
+  }
+
+  async createClientInvitation(
+    storeId: string,
+    clientId: string,
+    input: { email: string; expiresAt: string },
+    actorId: string,
+    now = new Date(),
+  ) {
+    const expiresAt = new Date(input.expiresAt);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt <= now) {
+      throw new BadRequestException('El vencimiento de la invitación debe ser futuro.');
+    }
+    const email = input.email.trim().toLowerCase();
+    const token = randomBytes(32).toString('base64url');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+
+    const invitation = await this.prisma.$transaction(async (transaction) => {
+      const client = await transaction.customer.findFirst({
+        where: { id: clientId, storeId, active: true },
+        select: { id: true, userId: true },
+      });
+      if (!client) throw new NotFoundException('Cliente no encontrado.');
+      if (client.userId) {
+        throw new BadRequestException('El cliente ya tiene acceso al portal.');
+      }
+      const existingUser = await transaction.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+      if (existingUser) {
+        throw new BadRequestException('El correo ya pertenece a un usuario registrado.');
+      }
+      const pending = await transaction.userInvitation.findFirst({
+        where: {
+          customerId: clientId,
+          storeId,
+          status: 'PENDING',
+          expiresAt: { gt: now },
+        },
+        select: { id: true },
+      });
+      if (pending) {
+        throw new BadRequestException('El cliente ya tiene una invitación vigente.');
+      }
+      const created = await transaction.userInvitation.create({
+        data: {
+          customerId: clientId,
+          storeId,
+          email,
+          platformRole: 'USER',
+          storeRole: 'CLIENT',
+          expiresAt,
+          tokenHash,
+          issuedById: actorId,
+        },
+      });
+      await transaction.auditEvent.create({
+        data: {
+          userId: actorId,
+          storeId,
+          event: 'CLIENT_INVITATION_CREATED',
+          entity: 'INVITACION_USUARIO',
+          entityId: created.id,
+          details: { customerId: clientId, email },
+        },
+      });
+      return created;
+    });
+
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      token,
+      expiresAt: invitation.expiresAt.toISOString(),
+    };
   }
 
   deactivateClient(storeId: string, clientId: string, actorId: string) {

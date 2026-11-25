@@ -58,6 +58,20 @@ export class PrismaAuthRepository implements AuthRepository {
           },
         });
       }
+      if (invitation.customerId && invitation.storeId) {
+        const linked = await transaction.customer.updateMany({
+          where: {
+            id: invitation.customerId,
+            storeId: invitation.storeId,
+            active: true,
+            userId: null,
+          },
+          data: { userId: user.id },
+        });
+        if (linked.count !== 1) {
+          throw new Error('Customer is no longer available for invitation');
+        }
+      }
       return this.toAuthUser(user);
     });
   }

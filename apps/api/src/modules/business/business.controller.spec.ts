@@ -28,6 +28,7 @@ describe('BusinessController', () => {
     }),
     listProducts: vi.fn().mockResolvedValue([]),
     createClient: vi.fn().mockResolvedValue({ id: 'client-1' }),
+    createClientInvitation: vi.fn().mockResolvedValue({ id: 'invitation-1', token: 'one-time-token' }),
     listClients: vi.fn().mockResolvedValue([]),
     createAccount: vi.fn(),
     listAccounts: vi.fn().mockResolvedValue([]),
@@ -145,6 +146,26 @@ describe('BusinessController', () => {
       'store-1',
       'account-1',
       '2026-10-30T10:00:00-05:00',
+    );
+  });
+
+  it('lets a store administrator invite an existing customer to the portal', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/stores/store-1/clients/client-1/invitations')
+      .send({
+        email: 'maria@example.com',
+        expiresAt: '2026-12-02T10:00:00-05:00',
+      })
+      .expect(201);
+
+    expect(service.createClientInvitation).toHaveBeenCalledWith(
+      'store-1',
+      'client-1',
+      {
+        email: 'maria@example.com',
+        expiresAt: '2026-12-02T10:00:00-05:00',
+      },
+      'admin-1',
     );
   });
 });
