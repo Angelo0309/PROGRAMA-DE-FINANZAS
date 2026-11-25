@@ -777,11 +777,14 @@ function ClientManagement({
     (account) => account.customerId === client.id
       || (!account.customerId && account.customerName === client.fullName),
   );
-  const rows = filteredClients.flatMap<{ client: ClientView; account: AccountView | null }>((client) => {
+  const rows = filteredClients.map((client) => {
     const clientAccounts = accountsFor(client);
-    return clientAccounts.length > 0
-      ? clientAccounts.map((account) => ({ client, account }))
-      : [{ client, account: null }];
+    return {
+      client,
+      accountCount: clientAccounts.length,
+      creditLimit: clientAccounts.reduce((sum, account) => sum + Number(account.creditLimit), 0),
+      outstanding: clientAccounts.reduce((sum, account) => sum + Number(account.originalOutstanding), 0),
+    };
   });
   const totalAvailable = accounts.reduce(
     (sum, account) => sum + Number(account.creditLimit) - Number(account.originalOutstanding),
@@ -911,16 +914,16 @@ function ClientManagement({
             ) : (
               <div className="table-wrapper">
                 <table className="client-table" aria-label="Clientes y cuentas">
-                  <thead><tr><th>Cliente</th><th>Documento</th><th>Moneda</th><th>Límite</th><th>Utilizado</th><th>Disponible</th></tr></thead>
+                  <thead><tr><th>Cliente</th><th>Documento</th><th>Cuentas</th><th>Límite total</th><th>Utilizado</th><th>Disponible</th></tr></thead>
                   <tbody>
-                    {rows.map(({ client, account }) => (
-                      <tr className={selectedClient?.id === client.id ? 'selected-row' : ''} key={`${client.id}-${account?.id ?? 'no-account'}`}>
+                    {rows.map(({ client, accountCount, creditLimit, outstanding }) => (
+                      <tr className={selectedClient?.id === client.id ? 'selected-row' : ''} key={client.id}>
                         <td><button className="table-link" type="button" onClick={() => setSelectedClientId(client.id)}>{client.fullName}</button></td>
                         <td>{client.documentType} {client.documentNumber}</td>
-                        <td>{account?.currency ?? '—'}</td>
-                        <td>{account ? money(account.currency, account.creditLimit) : 'Sin cuenta'}</td>
-                        <td>{account ? money(account.currency, account.originalOutstanding) : '—'}</td>
-                        <td>{account ? money(account.currency, String(Number(account.creditLimit) - Number(account.originalOutstanding))) : '—'}</td>
+                        <td>{accountCount}</td>
+                        <td>{accountCount ? money(access.currency, String(creditLimit)) : 'Sin cuenta'}</td>
+                        <td>{accountCount ? money(access.currency, String(outstanding)) : '—'}</td>
+                        <td>{accountCount ? money(access.currency, String(creditLimit - outstanding)) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>

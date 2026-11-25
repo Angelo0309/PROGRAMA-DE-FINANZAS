@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../../database/prisma.service.js';
+import { effectiveObligationStatus } from '../finance/domain/obligation-status.js';
 
 @Injectable()
 export class PortalService {
@@ -337,7 +338,7 @@ export class PortalService {
     }));
   }
 
-  async getMySchedule(userId: string) {
+  async getMySchedule(userId: string, now = new Date()) {
     const obligations = await this.prisma.obligation.findMany({
       where: { credit: { account: { customer: { userId } } } },
       include: {
@@ -366,7 +367,7 @@ export class PortalService {
       lateInterest: obligation.lateInterest.toFixed(2),
       amountDue: obligation.amountDue.toFixed(2),
       paidAmount: obligation.paidAmount.toFixed(2),
-      status: obligation.status,
+      status: effectiveObligationStatus(obligation.status, obligation.dueDate, now),
     }));
   }
 

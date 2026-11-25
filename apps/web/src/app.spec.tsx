@@ -552,6 +552,31 @@ describe('App por roles', () => {
     expect(within(clientTable).getByText('S/ 900.00')).toBeVisible();
   });
 
+  it('shows one directory row when the same customer owns two accounts', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    api.listAccounts.mockResolvedValue([
+      ...await api.listAccounts(),
+      {
+        id: 'account-2',
+        accountNumber: 'CC-002',
+        customerId: 'client-1',
+        customerName: 'Maria Demo',
+        creditLimit: '1000.00',
+        originalOutstanding: '150.00',
+        currency: 'PEN',
+      },
+    ]);
+    render(<App api={api as never} />);
+    await login();
+    fireEvent.click(await screen.findByRole('button', { name: 'Clientes' }));
+
+    const clientTable = await screen.findByRole('table', { name: 'Clientes y cuentas' });
+    expect(within(clientTable).getAllByRole('row')).toHaveLength(2);
+    expect(within(clientTable).getByRole('button', { name: 'Maria Demo' })).toBeVisible();
+    expect(within(clientTable).getByText('2')).toBeVisible();
+    expect(within(clientTable).getByText('S/ 1750.00')).toBeVisible();
+  });
+
   it('creates a client and includes it in the business directory', async () => {
     const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
     render(<App api={api as never} />);

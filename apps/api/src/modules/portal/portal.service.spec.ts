@@ -301,6 +301,29 @@ describe('PortalService logical deactivation', () => {
     }));
   });
 
+  it('shows a client pending installment as overdue after its due date', async () => {
+    const decimal = (value: string) => ({ toFixed: (places: number) => Number(value).toFixed(places) });
+    const findMany = vi.fn().mockResolvedValue([{
+      id: 'obligation-overdue', installmentNumber: 1, dueDate: new Date('2026-11-24T00:00:00.000Z'),
+      openingBalance: decimal('100'), principalDue: decimal('95'),
+      compensatoryInterest: decimal('5'), lateInterest: decimal('0'),
+      amountDue: decimal('100'), paidAmount: decimal('0'), status: 'PENDING',
+      credit: {
+        accountId: 'account-1', purchaseId: 'purchase-1', currency: 'PEN',
+        purchase: { purchasedAt: new Date('2026-10-20T15:00:00.000Z') },
+      },
+    }]);
+    const service = new PortalService({ obligation: { findMany } } as unknown as PrismaService);
+
+    await expect(service.getMySchedule(
+      'client-user-1',
+      new Date('2026-11-25T15:00:00.000Z'),
+    )).resolves.toEqual([expect.objectContaining({
+      id: 'obligation-overdue',
+      status: 'OVERDUE',
+    })]);
+  });
+
   it('returns only payments owned by the authenticated client with their allocations', async () => {
     const decimal = (value: string) => ({ toFixed: (places: number) => Number(value).toFixed(places) });
     const findMany = vi.fn().mockResolvedValue([{

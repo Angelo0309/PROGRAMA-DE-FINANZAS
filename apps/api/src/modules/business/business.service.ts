@@ -6,6 +6,7 @@ import { DateTime } from 'luxon';
 
 import { PrismaService } from '../../database/prisma.service.js';
 import { calculateAmountDue } from '../finance/domain/financial-engine.js';
+import { effectiveObligationStatus } from '../finance/domain/obligation-status.js';
 
 @Injectable()
 export class BusinessService {
@@ -456,7 +457,7 @@ export class BusinessService {
     );
   }
 
-  async getSchedule(storeId: string, accountId: string) {
+  async getSchedule(storeId: string, accountId: string, now = new Date()) {
     const obligations = await this.prisma.obligation.findMany({
       where: { credit: { storeId, accountId } },
       include: {
@@ -483,7 +484,7 @@ export class BusinessService {
       amountDue: item.amountDue.toFixed(2),
       paidAmount: item.paidAmount.toFixed(2),
       currency: item.credit.currency,
-      status: item.status,
+      status: effectiveObligationStatus(item.status, item.dueDate, now),
     }));
   }
 

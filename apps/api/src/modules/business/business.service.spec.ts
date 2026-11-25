@@ -267,6 +267,50 @@ describe('BusinessService payment schedule', () => {
       },
     }));
   });
+
+  it('shows an unpaid obligation as overdue after its due date without changing paid rows', async () => {
+    const decimal = (value: string) => ({
+      toFixed: (places: number) => Number(value).toFixed(places),
+    });
+    const obligation = (id: string, dueDate: string, status: string) => ({
+      id,
+      installmentNumber: 1,
+      dueDate: new Date(`${dueDate}T00:00:00.000Z`),
+      openingBalance: decimal('100'),
+      principalDue: decimal('95'),
+      compensatoryInterest: decimal('5'),
+      lateInterest: decimal('0'),
+      amountDue: decimal('100'),
+      paidAmount: decimal(status === 'PAID' ? '100' : '0'),
+      status,
+      credit: {
+        purchaseId: `purchase-${id}`,
+        currency: 'PEN',
+        purchase: { purchasedAt: new Date('2026-10-20T15:00:00.000Z') },
+      },
+    });
+    const service = new BusinessService({
+      obligation: {
+        findMany: vi.fn().mockResolvedValue([
+          obligation('overdue', '2026-11-24', 'PENDING'),
+          obligation('today', '2026-11-25', 'PENDING'),
+          obligation('paid', '2026-11-20', 'PAID'),
+        ]),
+      },
+    } as unknown as PrismaService);
+
+    const result = await service.getSchedule(
+      'store-1',
+      'account-1',
+      new Date('2026-11-25T15:00:00.000Z'),
+    );
+
+    expect(result.map((item) => [item.id, item.status])).toEqual([
+      ['overdue', 'OVERDUE'],
+      ['today', 'PENDING'],
+      ['paid', 'PAID'],
+    ]);
+  });
 });
 
 describe('BusinessService payment quote', () => {
