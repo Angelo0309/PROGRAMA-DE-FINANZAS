@@ -803,6 +803,15 @@ function ClientManagement({
     setError('');
   }
 
+  function selectClient(clientId: string) {
+    setSelectedClientId(clientId);
+    setShowInvitationForm(false);
+    setInvitationEmail('');
+    setActivationLink('');
+    setError('');
+    setNotice('');
+  }
+
   async function saveClient(event: FormEvent) {
     event.preventDefault();
     const parsed = clientFormSchema.safeParse({
@@ -921,7 +930,7 @@ function ClientManagement({
                   <tbody>
                     {rows.map(({ client, accountCount, creditLimit, outstanding }) => (
                       <tr className={selectedClient?.id === client.id ? 'selected-row' : ''} key={client.id}>
-                        <td><button className="table-link" type="button" onClick={() => setSelectedClientId(client.id)}>{client.fullName}</button></td>
+                        <td><button className="table-link" type="button" onClick={() => selectClient(client.id)}>{client.fullName}</button></td>
                         <td>{client.documentType} {client.documentNumber}</td>
                         <td>{accountCount}</td>
                         <td>{accountCount ? money(access.currency, String(creditLimit)) : 'Sin cuenta'}</td>

@@ -625,6 +625,33 @@ describe('App por roles', () => {
     expect(await screen.findByDisplayValue(/activar\?token=client-one-time-token/)).toBeVisible();
   });
 
+  it('clears a one-time invitation link when another customer is selected', async () => {
+    const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
+    const clients = await api.listClients('store-1');
+    api.listClients.mockResolvedValue([
+      ...clients,
+      {
+        id: 'client-2', documentType: 'DNI', documentNumber: '76543210',
+        fullName: 'Pedro Sanchez', phone: null, address: null,
+        hasPortalAccess: false, hasPendingInvitation: false,
+      },
+    ]);
+    render(<App api={api as never} />);
+    await login();
+    fireEvent.click(await screen.findByRole('button', { name: 'Clientes' }));
+    fireEvent.click(await screen.findByRole('button', { name: /invitar al portal/i }));
+    fireEvent.change(screen.getByLabelText(/correo para acceso/i), {
+      target: { value: 'maria@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generar invitación/i }));
+    expect(await screen.findByDisplayValue(/activar\?token=client-one-time-token/)).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pedro Sanchez' }));
+
+    expect(screen.queryByDisplayValue(/activar\?token=client-one-time-token/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /invitar al portal/i })).toBeVisible();
+  });
+
   it('creates a credit account together with its initial financial condition', async () => {
     const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
     render(<App api={api as never} />);
