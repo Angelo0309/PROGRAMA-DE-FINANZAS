@@ -68,6 +68,22 @@ export interface FrenchSchedule {
   installments: Installment[];
 }
 
+export interface InitialCapitalizationInput {
+  purchaseDate: LocalDate;
+  firstDueDate: LocalDate;
+  originalPrincipal: Decimal.Value;
+  capitalizedPrincipal: Decimal.Value;
+}
+
+export interface InitialCapitalizationSummary {
+  startDate: LocalDate;
+  endDate: LocalDate;
+  days: number;
+  originalPrincipal: string;
+  capitalizedInterest: string;
+  capitalizedPrincipal: string;
+}
+
 export interface DueObligation {
   id: string;
   dueDate: LocalDate;
@@ -147,6 +163,25 @@ export function commercialDays30_360(start: LocalDate, end: LocalDate): number {
     normalizedCommercialDay(endDate) -
     normalizedCommercialDay(startDate)
   );
+}
+
+export function summarizeInitialCapitalization(
+  input: InitialCapitalizationInput,
+): InitialCapitalizationSummary {
+  const originalPrincipal = new Decimal(input.originalPrincipal);
+  const capitalizedPrincipal = new Decimal(input.capitalizedPrincipal);
+  if (!originalPrincipal.isPositive() || capitalizedPrincipal.lt(originalPrincipal)) {
+    throw new RangeError('La capitalización inicial no puede reducir el capital original');
+  }
+  const endDate = parseLocalDate(input.firstDueDate).minus({ months: 1 }).toISODate()!;
+  return {
+    startDate: input.purchaseDate,
+    endDate,
+    days: commercialDays30_360(input.purchaseDate, endDate),
+    originalPrincipal: money(originalPrincipal).toFixed(2),
+    capitalizedInterest: money(capitalizedPrincipal.minus(originalPrincipal)).toFixed(2),
+    capitalizedPrincipal: money(capitalizedPrincipal).toFixed(2),
+  };
 }
 
 export function toEffectiveDailyRate(input: RateInput): Decimal {

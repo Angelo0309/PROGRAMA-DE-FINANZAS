@@ -226,12 +226,13 @@ describe('BusinessService payment schedule', () => {
   it('returns purchase metadata in the selected account schedule', async () => {
     const decimal = (value: string) => ({
       toFixed: (places: number) => Number(value).toFixed(places),
+      toString: () => value,
     });
     const findMany = vi.fn().mockResolvedValue([{
       id: 'obligation-1',
       installmentNumber: 1,
-      dueDate: new Date('2026-11-28T00:00:00.000Z'),
-      openingBalance: decimal('100'),
+      dueDate: new Date('2026-10-26T00:00:00.000Z'),
+      openingBalance: decimal('1207.913395534745'),
       principalDue: decimal('95'),
       compensatoryInterest: decimal('5'),
       lateInterest: decimal('0'),
@@ -240,8 +241,12 @@ describe('BusinessService payment schedule', () => {
       status: 'PENDING',
       credit: {
         purchaseId: 'purchase-1',
+        principal: decimal('1200'),
         currency: 'PEN',
-        purchase: { purchasedAt: new Date('2026-10-20T15:00:00.000Z') },
+        purchase: {
+          mode: 'INSTALLMENTS',
+          purchasedAt: new Date('2026-09-15T15:00:00.000Z'),
+        },
       },
     }]);
     const service = new BusinessService({
@@ -251,7 +256,15 @@ describe('BusinessService payment schedule', () => {
     await expect(service.getSchedule('store-1', 'account-1')).resolves.toEqual([
       expect.objectContaining({
         purchaseId: 'purchase-1',
-        purchasedAt: '2026-10-20T15:00:00.000Z',
+        purchasedAt: '2026-09-15T15:00:00.000Z',
+        capitalization: {
+          startDate: '2026-09-15',
+          endDate: '2026-09-26',
+          days: 11,
+          originalPrincipal: '1200.00',
+          capitalizedInterest: '7.91',
+          capitalizedPrincipal: '1207.91',
+        },
       }),
     ]);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -260,12 +273,40 @@ describe('BusinessService payment schedule', () => {
         credit: {
           select: {
             purchaseId: true,
+            principal: true,
             currency: true,
-            purchase: { select: { purchasedAt: true } },
+            purchase: { select: { mode: true, purchasedAt: true } },
           },
         },
       },
     }));
+  });
+
+  it('does not describe French capitalization for an end-of-month purchase', async () => {
+    const decimal = (value: string) => ({
+      toFixed: (places: number) => Number(value).toFixed(places),
+      toString: () => value,
+    });
+    const service = new BusinessService({
+      obligation: { findMany: vi.fn().mockResolvedValue([{
+        id: 'obligation-1', installmentNumber: 1,
+        dueDate: new Date('2026-10-05T00:00:00.000Z'),
+        openingBalance: decimal('120'), principalDue: decimal('120'),
+        compensatoryInterest: decimal('1.08'), lateInterest: decimal('0'),
+        amountDue: decimal('121.08'), paidAmount: decimal('0'), status: 'PENDING',
+        credit: {
+          purchaseId: 'purchase-1', principal: decimal('120'), currency: 'PEN',
+          purchase: {
+            mode: 'END_OF_MONTH',
+            purchasedAt: new Date('2026-09-20T15:00:00.000Z'),
+          },
+        },
+      }]) },
+    } as unknown as PrismaService);
+
+    await expect(service.getSchedule('store-1', 'account-1')).resolves.toEqual([
+      expect.objectContaining({ capitalization: null }),
+    ]);
   });
 
   it('shows an unpaid obligation as overdue after its due date without changing paid rows', async () => {

@@ -266,25 +266,40 @@ describe('PortalService logical deactivation', () => {
   });
 
   it('returns the authenticated client payment schedule with official decimal strings', async () => {
-    const decimal = (value: string) => ({ toFixed: (places: number) => Number(value).toFixed(places) });
+    const decimal = (value: string) => ({
+      toFixed: (places: number) => Number(value).toFixed(places),
+      toString: () => value,
+    });
     const findMany = vi.fn().mockResolvedValue([{
-      id: 'obligation-1', installmentNumber: 1, dueDate: new Date('2026-12-15T00:00:00.000Z'),
-      openingBalance: decimal('1000'), principalDue: decimal('250'),
+      id: 'obligation-1', installmentNumber: 1, dueDate: new Date('2026-10-26T00:00:00.000Z'),
+      openingBalance: decimal('1207.913395534745'), principalDue: decimal('250'),
       compensatoryInterest: decimal('35.25'), lateInterest: decimal('0'),
       amountDue: decimal('285.25'), paidAmount: decimal('0'), status: 'PENDING',
       credit: {
         accountId: 'account-1',
         purchaseId: 'purchase-1',
+        principal: decimal('1200'),
         currency: 'PEN',
-        purchase: { purchasedAt: new Date('2026-10-20T15:00:00.000Z') },
+        purchase: {
+          mode: 'INSTALLMENTS',
+          purchasedAt: new Date('2026-09-15T15:00:00.000Z'),
+        },
       },
     }]);
     const service = new PortalService({ obligation: { findMany } } as unknown as PrismaService);
 
-    await expect(service.getMySchedule('client-user-1')).resolves.toEqual([expect.objectContaining({
+    await expect(service.getMySchedule(
+      'client-user-1',
+      new Date('2026-10-01T15:00:00.000Z'),
+    )).resolves.toEqual([expect.objectContaining({
       id: 'obligation-1', accountId: 'account-1', purchaseId: 'purchase-1',
-      purchasedAt: '2026-10-20T15:00:00.000Z', currency: 'PEN',
-      dueDate: '2026-12-15', amountDue: '285.25', paidAmount: '0.00', status: 'PENDING',
+      purchasedAt: '2026-09-15T15:00:00.000Z', currency: 'PEN',
+      dueDate: '2026-10-26', amountDue: '285.25', paidAmount: '0.00', status: 'PENDING',
+      capitalization: {
+        startDate: '2026-09-15', endDate: '2026-09-26', days: 11,
+        originalPrincipal: '1200.00', capitalizedInterest: '7.91',
+        capitalizedPrincipal: '1207.91',
+      },
     })]);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { credit: { account: { customer: { userId: 'client-user-1' } } } },
@@ -293,8 +308,9 @@ describe('PortalService logical deactivation', () => {
           select: {
             accountId: true,
             purchaseId: true,
+            principal: true,
             currency: true,
-            purchase: { select: { purchasedAt: true } },
+            purchase: { select: { mode: true, purchasedAt: true } },
           },
         },
       },

@@ -7,6 +7,7 @@ import {
   calculateAmountDue,
   calculateEndOfMonthObligation,
   commercialDays30_360,
+  summarizeInitialCapitalization,
   toEffectiveDailyRate,
 } from './financial-engine.js';
 
@@ -17,6 +18,33 @@ describe('commercialDays30_360', () => {
 
   it('normalizes the last day of February to day 30', () => {
     expect(commercialDays30_360('2028-02-29', '2028-03-30')).toBe(30);
+  });
+});
+
+describe('summarizeInitialCapitalization', () => {
+  it('explains the eleven capitalized days from the final assignment example', () => {
+    expect(summarizeInitialCapitalization({
+      purchaseDate: '2026-09-15',
+      firstDueDate: '2026-10-26',
+      originalPrincipal: '1200',
+      capitalizedPrincipal: '1207.913395534745',
+    })).toEqual({
+      startDate: '2026-09-15',
+      endDate: '2026-09-26',
+      days: 11,
+      originalPrincipal: '1200.00',
+      capitalizedInterest: '7.91',
+      capitalizedPrincipal: '1207.91',
+    });
+  });
+
+  it('reports zero capitalized interest when the rate produced no increase', () => {
+    expect(summarizeInitialCapitalization({
+      purchaseDate: '2026-09-15',
+      firstDueDate: '2026-10-26',
+      originalPrincipal: '1200',
+      capitalizedPrincipal: '1200',
+    }).capitalizedInterest).toBe('0.00');
   });
 });
 

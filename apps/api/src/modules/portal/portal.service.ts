@@ -6,8 +6,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { DateTime } from 'luxon';
 
 import { PrismaService } from '../../database/prisma.service.js';
+import { summarizeInitialCapitalization } from '../finance/domain/financial-engine.js';
 import { effectiveObligationStatus } from '../finance/domain/obligation-status.js';
 
 @Injectable()
@@ -346,13 +348,21 @@ export class PortalService {
           select: {
             accountId: true,
             purchaseId: true,
+            principal: true,
             currency: true,
-            purchase: { select: { purchasedAt: true } },
+            purchase: { select: { mode: true, purchasedAt: true } },
           },
         },
       },
       orderBy: [{ dueDate: 'asc' }, { installmentNumber: 'asc' }],
     });
+    const firstByPurchase = new Map<string, (typeof obligations)[number]>();
+    for (const obligation of obligations) {
+      const current = firstByPurchase.get(obligation.credit.purchaseId);
+      if (!current || obligation.installmentNumber < current.installmentNumber) {
+        firstByPurchase.set(obligation.credit.purchaseId, obligation);
+      }
+    }
     return obligations.map((obligation) => ({
       id: obligation.id,
       accountId: obligation.credit.accountId,
@@ -368,6 +378,21 @@ export class PortalService {
       amountDue: obligation.amountDue.toFixed(2),
       paidAmount: obligation.paidAmount.toFixed(2),
       status: effectiveObligationStatus(obligation.status, obligation.dueDate, now),
+      capitalization: obligation.credit.purchase.mode === 'INSTALLMENTS'
+        ? summarizeInitialCapitalization({
+            purchaseDate: DateTime.fromJSDate(
+              obligation.credit.purchase.purchasedAt,
+              { zone: 'utc' },
+            ).setZone('America/Lima').toISODate()!,
+            firstDueDate: firstByPurchase.get(obligation.credit.purchaseId)!.dueDate
+              .toISOString()
+              .slice(0, 10),
+            originalPrincipal: obligation.credit.principal.toString(),
+            capitalizedPrincipal: firstByPurchase
+              .get(obligation.credit.purchaseId)!
+              .openingBalance.toString(),
+          })
+        : null,
     }));
   }
 
