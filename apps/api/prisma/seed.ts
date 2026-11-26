@@ -1,7 +1,8 @@
 import 'dotenv/config';
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Algorithm, hash } from '@node-rs/argon2';
+import { Decimal } from 'decimal.js';
 
 import { PrismaService } from '../src/database/prisma.service.js';
 import { CreditOperationsService } from '../src/modules/operations/credit-operations.service.js';
@@ -66,10 +67,17 @@ const clientUser = await upsertUser({
   email: 'cliente@credicuenta.test',
   displayName: 'Maria Cliente Demo',
 });
+const operatorUser = await upsertUser({
+  id: '20000000-0000-4000-8000-000000000004',
+  username: 'operador.demo',
+  email: 'operador@credicuenta.test',
+  displayName: 'Operador Demo',
+});
 
 for (const access of [
   { userId: businessAdmin.id, role: 'STORE_ADMIN' as const },
   { userId: clientUser.id, role: 'CLIENT' as const },
+  { userId: operatorUser.id, role: 'OPERATOR' as const },
 ]) {
   await prisma.storeAccess.upsert({
     where: { storeId_userId: { storeId: store.id, userId: access.userId } },
@@ -99,6 +107,60 @@ const customer = await prisma.customer.upsert({
   },
 });
 
+const demoCustomers = await Promise.all([
+  {
+    id: '30000000-0000-4000-8000-000000000002',
+    documentNumber: '70862579',
+    fullName: 'Pedro Sanchez Demo',
+    phone: '+51 900 000 002',
+    address: 'Sin cuenta para probar el estado vacio',
+  },
+  {
+    id: '30000000-0000-4000-8000-000000000003',
+    documentNumber: '70000002',
+    fullName: 'Lucia Quispe Demo',
+    phone: '+51 900 000 003',
+    address: 'Cuenta disponible sin movimientos',
+  },
+  {
+    id: '30000000-0000-4000-8000-000000000004',
+    documentNumber: '70000003',
+    fullName: 'Carlos Mendoza Demo',
+    phone: '+51 900 000 004',
+    address: 'Compra demostrativa en tres cuotas',
+  },
+  {
+    id: '30000000-0000-4000-8000-000000000005',
+    documentNumber: '70000004',
+    fullName: 'Rosa Torres Demo',
+    phone: '+51 900 000 005',
+    address: 'Compra demostrativa pagada',
+  },
+].map((input) => prisma.customer.upsert({
+  where: {
+    storeId_documentType_documentNumber: {
+      storeId: store.id,
+      documentType: 'DNI',
+      documentNumber: input.documentNumber,
+    },
+  },
+  update: {
+    fullName: input.fullName,
+    phone: input.phone,
+    address: input.address,
+    active: true,
+  },
+  create: {
+    ...input,
+    storeId: store.id,
+    documentType: 'DNI',
+  },
+})));
+
+const customerByDocument = new Map(
+  demoCustomers.map((item) => [item.documentNumber, item]),
+);
+
 const account = await prisma.creditAccount.upsert({
   where: {
     storeId_accountNumber: { storeId: store.id, accountNumber: 'CC-000001' },
@@ -127,6 +189,40 @@ const demoPaymentAccount = await prisma.creditAccount.upsert({
     currency: 'PEN',
     creditLimit: '1000.0000',
   },
+});
+
+async function upsertDemoAccount(input: {
+  id: string;
+  customerId: string;
+  accountNumber: string;
+  creditLimit: string;
+}) {
+  return prisma.creditAccount.upsert({
+    where: {
+      storeId_accountNumber: { storeId: store.id, accountNumber: input.accountNumber },
+    },
+    update: { customerId: input.customerId, active: true, creditLimit: input.creditLimit },
+    create: { ...input, storeId: store.id, currency: 'PEN' },
+  });
+}
+
+const unusedAccount = await upsertDemoAccount({
+  id: '40000000-0000-4000-8000-000000000003',
+  customerId: customerByDocument.get('70000002')!.id,
+  accountNumber: 'CC-000002',
+  creditLimit: '1500.0000',
+});
+const installmentAccount = await upsertDemoAccount({
+  id: '40000000-0000-4000-8000-000000000004',
+  customerId: customerByDocument.get('70000003')!.id,
+  accountNumber: 'CC-000003',
+  creditLimit: '2500.0000',
+});
+const paidAccount = await upsertDemoAccount({
+  id: '40000000-0000-4000-8000-000000000005',
+  customerId: customerByDocument.get('70000004')!.id,
+  accountNumber: 'CC-000004',
+  creditLimit: '1200.0000',
 });
 
 const accountCondition = await prisma.creditCondition.upsert({
@@ -168,6 +264,28 @@ await prisma.creditCondition.upsert({
   },
 });
 
+for (const [index, demoAccount] of [unusedAccount, installmentAccount, paidAccount].entries()) {
+  await prisma.creditCondition.upsert({
+    where: { accountId_version: { accountId: demoAccount.id, version: 1 } },
+    update: {},
+    create: {
+      id: `50000000-0000-4000-8000-${String(index + 3).padStart(12, '0')}`,
+      storeId: store.id,
+      accountId: demoAccount.id,
+      version: 1,
+      compensatoryRateKind: accountCondition.compensatoryRateKind,
+      compensatoryRate: accountCondition.compensatoryRate,
+      lateRateKind: accountCondition.lateRateKind,
+      lateRate: accountCondition.lateRate,
+      billingDay: accountCondition.billingDay,
+      dueDay: accountCondition.dueDay,
+      maxInstallments: accountCondition.maxInstallments,
+      graceMonths: accountCondition.graceMonths,
+      validFrom: accountCondition.validFrom,
+    },
+  });
+}
+
 for (const product of [
   {
     sku: 'PROD-001',
@@ -183,6 +301,34 @@ for (const product of [
     imageUrl:
       'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=900&q=80',
   },
+  {
+    sku: 'ELEC-001',
+    name: 'Tablet Demo',
+    unitPrice: '450.0000',
+    imageUrl:
+      'https://images.unsplash.com/photo-1561154464-82e9adf32764?auto=format&fit=crop&w=900&q=80',
+  },
+  {
+    sku: 'HOGAR-001',
+    name: 'Licuadora Demo',
+    unitPrice: '180.0000',
+    imageUrl:
+      'https://images.unsplash.com/photo-1570222094114-d054a817e56b?auto=format&fit=crop&w=900&q=80',
+  },
+  {
+    sku: 'SERV-002',
+    name: 'Mantenimiento Demo',
+    unitPrice: '90.0000',
+    imageUrl:
+      'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=900&q=80',
+  },
+  {
+    sku: 'PROD-INACTIVO',
+    name: 'Producto descontinuado',
+    unitPrice: '60.0000',
+    imageUrl: null,
+    active: false,
+  },
 ]) {
   await prisma.productService.upsert({
     where: { storeId_sku: { storeId: store.id, sku: product.sku } },
@@ -190,9 +336,9 @@ for (const product of [
       name: product.name,
       unitPrice: product.unitPrice,
       imageUrl: product.imageUrl,
-      active: true,
+      active: product.active ?? true,
     },
-    create: { ...product, storeId: store.id, currency: 'PEN' },
+    create: { ...product, active: product.active ?? true, storeId: store.id, currency: 'PEN' },
   });
 }
 
@@ -220,6 +366,118 @@ await operations.createCut({
   idempotencyKey: `auto:${demoPaymentAccount.id}:${demoCutAt}`,
   cutAt: demoCutAt,
 });
+
+const installmentProduct = await prisma.productService.findUniqueOrThrow({
+  where: { storeId_sku: { storeId: store.id, sku: 'ELEC-001' } },
+});
+const installmentPurchase = await operations.createPurchase({
+  storeId: store.id,
+  accountId: installmentAccount.id,
+  operatorUserId: operatorUser.id,
+  idempotencyKey: 'demo-installment-purchase-v1',
+  purchasedAt: '2026-10-20T11:00:00-05:00',
+  currency: 'PEN',
+  mode: 'INSTALLMENTS',
+  installmentCount: 3,
+  items: [{ productId: installmentProduct.id, quantity: '1' }],
+});
+await operations.createCut({
+  storeId: store.id,
+  accountId: installmentAccount.id,
+  operatorUserId: operatorUser.id,
+  idempotencyKey: 'demo-installment-cut-v1',
+  cutAt: installmentPurchase.assignedCutAt,
+});
+
+const paidProduct = await prisma.productService.findUniqueOrThrow({
+  where: { storeId_sku: { storeId: store.id, sku: 'HOGAR-001' } },
+});
+const paidPurchase = await operations.createPurchase({
+  storeId: store.id,
+  accountId: paidAccount.id,
+  operatorUserId: operatorUser.id,
+  idempotencyKey: 'demo-paid-purchase-v1',
+  purchasedAt: '2026-08-20T11:00:00-05:00',
+  currency: 'PEN',
+  mode: 'END_OF_MONTH',
+  items: [{ productId: paidProduct.id, quantity: '1' }],
+});
+await operations.createCut({
+  storeId: store.id,
+  accountId: paidAccount.id,
+  operatorUserId: operatorUser.id,
+  idempotencyKey: 'demo-paid-cut-v1',
+  cutAt: paidPurchase.assignedCutAt,
+});
+const paidObligation = paidPurchase.obligations[0]!;
+await operations.createPayment({
+  storeId: store.id,
+  accountId: paidAccount.id,
+  operatorUserId: operatorUser.id,
+  idempotencyKey: 'demo-paid-payment-v1',
+  paidAt: `${paidObligation.dueDate}T12:00:00-05:00`,
+  currency: 'PEN',
+  amount: new Decimal(paidObligation.amountDue).toFixed(2),
+});
+
+for (const invitation of [
+  {
+    key: 'demo-pending-invitation',
+    email: 'pedro@demo.credicuenta.test',
+    customerId: customerByDocument.get('70862579')!.id,
+    status: 'PENDING' as const,
+    expiresAt: new Date('2026-12-31T23:59:59-05:00'),
+    acceptedAt: null,
+  },
+  {
+    key: 'demo-accepted-invitation',
+    email: 'aceptada@demo.credicuenta.test',
+    customerId: customer.id,
+    status: 'ACCEPTED' as const,
+    expiresAt: new Date('2026-12-31T23:59:59-05:00'),
+    acceptedAt: new Date('2026-11-01T10:00:00-05:00'),
+  },
+  {
+    key: 'demo-revoked-invitation',
+    email: 'revocada@demo.credicuenta.test',
+    customerId: null,
+    status: 'REVOKED' as const,
+    expiresAt: new Date('2026-12-31T23:59:59-05:00'),
+    acceptedAt: null,
+  },
+  {
+    key: 'demo-expired-invitation',
+    email: 'vencida@demo.credicuenta.test',
+    customerId: null,
+    status: 'EXPIRED' as const,
+    expiresAt: new Date('2026-10-01T23:59:59-05:00'),
+    acceptedAt: null,
+  },
+]) {
+  const tokenHash = createHash('sha256').update(invitation.key).digest('hex');
+  await prisma.userInvitation.upsert({
+    where: { tokenHash },
+    update: {
+      email: invitation.email,
+      customerId: invitation.customerId,
+      status: invitation.status,
+      expiresAt: invitation.expiresAt,
+      acceptedAt: invitation.acceptedAt,
+    },
+    create: {
+      storeId: store.id,
+      customerId: invitation.customerId,
+      issuedById: platformAdmin.id,
+      email: invitation.email,
+      tokenHash,
+      platformRole: 'USER',
+      storeRole: 'CLIENT',
+      status: invitation.status,
+      expiresAt: invitation.expiresAt,
+      acceptedAt: invitation.acceptedAt,
+    },
+  });
+}
 
 await prisma.auditEvent.create({
   data: {

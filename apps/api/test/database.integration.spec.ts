@@ -49,6 +49,84 @@ integration('MariaDB integration', () => {
     });
   });
 
+  it('loads varied demo scenarios for frontend testing', async () => {
+    const store = await prisma.store.findUniqueOrThrow({ where: { taxId: '20123456789' } });
+    const customers = await prisma.customer.findMany({
+      where: {
+        storeId: store.id,
+        documentNumber: { in: ['70862579', '70000002', '70000003', '70000004'] },
+      },
+      include: {
+        accounts: {
+          include: {
+            payments: true,
+            purchases: {
+              include: { credit: { include: { obligations: true } } },
+            },
+          },
+        },
+      },
+    });
+    const customerByDocument = new Map(
+      customers.map((customer) => [customer.documentNumber, customer]),
+    );
+
+    expect(customers).toHaveLength(4);
+    expect(customerByDocument.get('70862579')!.accounts).toHaveLength(0);
+    expect(customerByDocument.get('70000002')!.accounts[0]!.purchases).toHaveLength(0);
+
+    const installmentAccount = customerByDocument.get('70000003')!.accounts[0]!;
+    expect(installmentAccount.purchases).toHaveLength(1);
+    expect(installmentAccount.purchases[0]).toMatchObject({
+      mode: 'INSTALLMENTS',
+      installmentCount: 3,
+    });
+    expect(installmentAccount.purchases[0]!.credit!.obligations).toHaveLength(3);
+    expect(
+      installmentAccount.purchases[0]!.credit!.obligations.every(
+        (obligation) => obligation.status === 'PENDING',
+      ),
+    ).toBe(true);
+
+    const paidAccount = customerByDocument.get('70000004')!.accounts[0]!;
+    expect(paidAccount.payments).toHaveLength(1);
+    expect(
+      paidAccount.purchases[0]!.credit!.obligations.every(
+        (obligation) => obligation.status === 'PAID',
+      ),
+    ).toBe(true);
+
+    const products = await prisma.productService.findMany({
+      where: {
+        storeId: store.id,
+        sku: { in: ['ELEC-001', 'HOGAR-001', 'SERV-002', 'PROD-INACTIVO'] },
+      },
+      select: { sku: true, active: true },
+    });
+    expect(products).toEqual(expect.arrayContaining([
+      { sku: 'ELEC-001', active: true },
+      { sku: 'HOGAR-001', active: true },
+      { sku: 'SERV-002', active: true },
+      { sku: 'PROD-INACTIVO', active: false },
+    ]));
+
+    const invitations = await prisma.userInvitation.findMany({
+      where: { email: { endsWith: '@demo.credicuenta.test' } },
+      select: { status: true },
+    });
+    expect(invitations.map((invitation) => invitation.status).sort()).toEqual([
+      'ACCEPTED',
+      'EXPIRED',
+      'PENDING',
+      'REVOKED',
+    ]);
+
+    await expect(prisma.storeAccess.findFirst({
+      where: { storeId: store.id, user: { email: 'operador@credicuenta.test' } },
+      select: { role: true, active: true },
+    })).resolves.toEqual({ role: 'OPERATOR', active: true });
+  });
+
   it('loads the deterministic payable demo without prepaying it', async () => {
     const store = await prisma.store.findUniqueOrThrow({ where: { taxId: '20123456789' } });
     const account = await prisma.creditAccount.findUniqueOrThrow({
