@@ -26,6 +26,7 @@ describe('summarizeInitialCapitalization', () => {
     expect(summarizeInitialCapitalization({
       purchaseDate: '2026-09-15',
       firstDueDate: '2026-10-26',
+      paymentDay: 26,
       originalPrincipal: '1200',
       capitalizedPrincipal: '1207.913395534745',
     })).toEqual({
@@ -42,9 +43,37 @@ describe('summarizeInitialCapitalization', () => {
     expect(summarizeInitialCapitalization({
       purchaseDate: '2026-09-15',
       firstDueDate: '2026-10-26',
+      paymentDay: 26,
       originalPrincipal: '1200',
       capitalizedPrincipal: '1200',
     }).capitalizedInterest).toBe('0.00');
+  });
+
+  it('recovers a configured day 30 when February clamps the first installment', () => {
+    expect(summarizeInitialCapitalization({
+      purchaseDate: '2027-01-15',
+      firstDueDate: '2027-02-28',
+      paymentDay: 30,
+      originalPrincipal: '1200',
+      capitalizedPrincipal: '1210',
+    })).toEqual(expect.objectContaining({
+      endDate: '2027-01-30',
+      days: 15,
+    }));
+  });
+
+  it('makes the displayed capital and interest reconcile after cent rounding', () => {
+    expect(summarizeInitialCapitalization({
+      purchaseDate: '2026-09-15',
+      firstDueDate: '2026-10-26',
+      paymentDay: 26,
+      originalPrincipal: '100.004',
+      capitalizedPrincipal: '100.005',
+    })).toEqual(expect.objectContaining({
+      originalPrincipal: '100.00',
+      capitalizedInterest: '0.01',
+      capitalizedPrincipal: '100.01',
+    }));
   });
 });
 

@@ -469,7 +469,13 @@ export class BusinessService {
             purchaseId: true,
             principal: true,
             currency: true,
-            purchase: { select: { mode: true, purchasedAt: true } },
+            purchase: {
+              select: {
+                mode: true,
+                purchasedAt: true,
+                condition: { select: { dueDay: true } },
+              },
+            },
           },
         },
       },
@@ -504,6 +510,7 @@ export class BusinessService {
             firstDueDate: firstByPurchase.get(item.credit.purchaseId)!.dueDate
               .toISOString()
               .slice(0, 10),
+            paymentDay: item.credit.purchase.condition.dueDay,
             originalPrincipal: item.credit.principal.toString(),
             capitalizedPrincipal: firstByPurchase
               .get(item.credit.purchaseId)!

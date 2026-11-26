@@ -91,4 +91,3 @@
 - [ ] **Step 1: Ejecutar integración MariaDB, lint, tipos, pruebas y compilación**
 - [ ] **Step 2: Revisar el diff completo y corregir hallazgos importantes con prueba RED→GREEN**
 - [ ] **Step 3: Fusionar localmente en `main`, repetir la verificación y publicar `main`**
-

@@ -350,7 +350,13 @@ export class PortalService {
             purchaseId: true,
             principal: true,
             currency: true,
-            purchase: { select: { mode: true, purchasedAt: true } },
+            purchase: {
+              select: {
+                mode: true,
+                purchasedAt: true,
+                condition: { select: { dueDay: true } },
+              },
+            },
           },
         },
       },
@@ -387,6 +393,7 @@ export class PortalService {
             firstDueDate: firstByPurchase.get(obligation.credit.purchaseId)!.dueDate
               .toISOString()
               .slice(0, 10),
+            paymentDay: obligation.credit.purchase.condition.dueDay,
             originalPrincipal: obligation.credit.principal.toString(),
             capitalizedPrincipal: firstByPurchase
               .get(obligation.credit.purchaseId)!

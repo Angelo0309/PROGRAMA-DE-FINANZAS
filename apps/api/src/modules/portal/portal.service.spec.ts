@@ -283,6 +283,7 @@ describe('PortalService logical deactivation', () => {
         purchase: {
           mode: 'INSTALLMENTS',
           purchasedAt: new Date('2026-09-15T15:00:00.000Z'),
+          condition: { dueDay: 26 },
         },
       },
     }]);
@@ -310,7 +311,13 @@ describe('PortalService logical deactivation', () => {
             purchaseId: true,
             principal: true,
             currency: true,
-            purchase: { select: { mode: true, purchasedAt: true } },
+            purchase: {
+              select: {
+                mode: true,
+                purchasedAt: true,
+                condition: { select: { dueDay: true } },
+              },
+            },
           },
         },
       },

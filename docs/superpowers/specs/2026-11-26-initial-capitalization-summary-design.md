@@ -7,7 +7,7 @@ Hacer visible el periodo de gracia total automático exigido por el enunciado fi
 ## Alcance
 
 - El backend calcula y entrega un resumen por plan de compra en modalidad `INSTALLMENTS`.
-- El periodo empieza en la fecha comercial de compra y termina un mes antes del primer vencimiento.
+- El periodo empieza en la fecha comercial de compra y termina en la fecha de pago configurada que precede al primer vencimiento, respetando el ajuste al último día real del mes.
 - Los días se calculan con la convención 30/360 ya usada por el motor financiero.
 - El interés capitalizado es la diferencia entre el saldo inicial de la primera cuota y el capital original del crédito.
 - El resumen se muestra al seleccionar un plan en la administración, en el detalle de compra del cliente y en el plan de pagos del cliente.
@@ -28,4 +28,3 @@ Hacer visible el periodo de gracia total automático exigido por el enunciado fi
 ## Presentación
 
 El bloque debe mostrar: periodo inicial capitalizado, rango de fechas, capital original, interés capitalizado y capital para calcular las cuotas. No debe representarse como una cuota adicional.
-

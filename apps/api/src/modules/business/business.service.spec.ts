@@ -246,6 +246,7 @@ describe('BusinessService payment schedule', () => {
         purchase: {
           mode: 'INSTALLMENTS',
           purchasedAt: new Date('2026-09-15T15:00:00.000Z'),
+          condition: { dueDay: 26 },
         },
       },
     }]);
@@ -275,7 +276,13 @@ describe('BusinessService payment schedule', () => {
             purchaseId: true,
             principal: true,
             currency: true,
-            purchase: { select: { mode: true, purchasedAt: true } },
+            purchase: {
+              select: {
+                mode: true,
+                purchasedAt: true,
+                condition: { select: { dueDay: true } },
+              },
+            },
           },
         },
       },
@@ -299,6 +306,7 @@ describe('BusinessService payment schedule', () => {
           purchase: {
             mode: 'END_OF_MONTH',
             purchasedAt: new Date('2026-09-20T15:00:00.000Z'),
+            condition: { dueDay: 5 },
           },
         },
       }]) },

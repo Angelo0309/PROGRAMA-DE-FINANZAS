@@ -71,6 +71,7 @@ export interface FrenchSchedule {
 export interface InitialCapitalizationInput {
   purchaseDate: LocalDate;
   firstDueDate: LocalDate;
+  paymentDay: number;
   originalPrincipal: Decimal.Value;
   capitalizedPrincipal: Decimal.Value;
 }
@@ -173,14 +174,18 @@ export function summarizeInitialCapitalization(
   if (!originalPrincipal.isPositive() || capitalizedPrincipal.lt(originalPrincipal)) {
     throw new RangeError('La capitalización inicial no puede reducir el capital original');
   }
-  const endDate = parseLocalDate(input.firstDueDate).minus({ months: 1 }).toISODate()!;
+  assertDay(input.paymentDay, 'El dia de pago');
+  const previousMonth = parseLocalDate(input.firstDueDate).minus({ months: 1 }).startOf('month');
+  const endDate = dateWithClampedDay(previousMonth, input.paymentDay).toISODate()!;
+  const displayedOriginal = money(originalPrincipal);
+  const displayedCapitalized = money(capitalizedPrincipal);
   return {
     startDate: input.purchaseDate,
     endDate,
     days: commercialDays30_360(input.purchaseDate, endDate),
-    originalPrincipal: money(originalPrincipal).toFixed(2),
-    capitalizedInterest: money(capitalizedPrincipal.minus(originalPrincipal)).toFixed(2),
-    capitalizedPrincipal: money(capitalizedPrincipal).toFixed(2),
+    originalPrincipal: displayedOriginal.toFixed(2),
+    capitalizedInterest: displayedCapitalized.minus(displayedOriginal).toFixed(2),
+    capitalizedPrincipal: displayedCapitalized.toFixed(2),
   };
 }
 
