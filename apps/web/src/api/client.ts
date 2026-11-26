@@ -54,6 +54,15 @@ export interface CreditConditionInput {
   validFrom: string;
 }
 
+export interface InitialCapitalizationView {
+  startDate: string;
+  endDate: string;
+  days: number;
+  originalPrincipal: string;
+  capitalizedInterest: string;
+  capitalizedPrincipal: string;
+}
+
 export interface ScheduleItemView {
   id: string;
   purchaseId: string;
@@ -68,6 +77,7 @@ export interface ScheduleItemView {
   paidAmount: string;
   currency: string;
   status: string;
+  capitalization?: InitialCapitalizationView | null;
 }
 
 export interface PaymentQuoteView {

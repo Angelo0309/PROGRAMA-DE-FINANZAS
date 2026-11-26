@@ -1,0 +1,52 @@
+.capitalization-summary {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.25fr) repeat(3, minmax(140px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--border);
+}
+
+.capitalization-summary > div {
+  display: grid;
+  align-content: center;
+  min-height: 92px;
+  padding: 14px 16px;
+  background: var(--surface-soft);
+}
+
+.capitalization-summary span,
+.capitalization-summary small {
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+.capitalization-summary strong {
+  margin-top: 7px;
+  font-size: 1rem;
+}
+
+.capitalization-summary-intro strong {
+  color: var(--cyan);
+}
+
+.capitalization-summary-intro small {
+  margin-top: 4px;
+}
+
+.schedule-panel > .capitalization-summary {
+  margin: 16px 19px;
+}
+
+.client-plans .capitalization-summary {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 900px) {
+  .capitalization-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .capitalization-summary { grid-template-columns: 1fr; }
+}

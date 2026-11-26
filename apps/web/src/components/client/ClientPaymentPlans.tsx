@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import type { AccountView, ScheduleItemView } from '../../api/client';
+import { CapitalizationSummary } from '../purchases/CapitalizationSummary';
 import { commercialDate, obligationStatus, officialMoney, purchasePlanLabel } from './clientFormat';
 import './client.css';
 
@@ -93,6 +94,8 @@ export function ClientPaymentPlans({ schedule, accounts }: { schedule: ClientSch
                 <article><span>Próximo vencimiento</span><strong className="store-name">{nextPending ? commercialDate(nextPending.dueDate) : 'Sin pendientes'}</strong></article>
                 <article><span>Importe del próximo vencimiento</span><strong className="store-name">{nextPending ? officialMoney(nextPending.currency, nextPending.amountDue) : '—'}</strong></article>
               </section>
+
+              {selectedPlan && <CapitalizationSummary summary={visibleSchedule[0]?.capitalization} currency={visibleSchedule[0]?.currency} />}
 
               <div className="table-wrapper">
                 <table aria-label="Mi plan de pagos">

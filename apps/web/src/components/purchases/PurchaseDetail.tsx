@@ -1,4 +1,5 @@
 import type { PurchaseView, ScheduleItemView } from '../../api/client';
+import { CapitalizationSummary } from './CapitalizationSummary';
 import { PurchaseItemImage } from './PurchaseItemImage';
 import {
   commercialDate,
@@ -48,6 +49,7 @@ export function PurchaseDetail({ purchase, obligations }: { purchase: PurchaseVi
           <p className="purchase-plan-summary">
             {plural(obligations.length, 'obligación', 'obligaciones')} · {plural(paidCount, 'pagada', 'pagadas')} · Próximo vencimiento: {nextPending ? commercialDate(nextPending.dueDate) : 'Sin pendientes'}
           </p>
+          <CapitalizationSummary summary={obligations[0]?.capitalization} currency={purchase.currency} />
           <div className="table-wrapper">
             <table aria-label="Cuotas de la compra">
               <thead><tr><th>Cuota</th><th>Vencimiento</th><th>Importe</th><th>Pagado</th><th>Estado</th></tr></thead>

@@ -719,8 +719,8 @@ describe('App por roles', () => {
     const secondPurchaseId = '22222222-2222-4222-8222-222222222222';
     const api = makeApi({ id: 'admin-1', displayName: 'Admin Negocio', platformRole: 'USER', storeAccesses: [{ storeId: 'store-1', storeName: 'Bodega Demo', currency: 'PEN', role: 'STORE_ADMIN' }] });
     api.getSchedule.mockResolvedValue([
-      { id: 'first-plan-row-1', purchaseId: firstPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '200.00', principalDue: '95.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
-      { id: 'first-plan-row-2', purchaseId: firstPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 2, dueDate: '2026-12-28', openingBalance: '105.00', principalDue: '100.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '105.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
+      { id: 'first-plan-row-1', purchaseId: firstPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '200.00', principalDue: '95.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING', capitalization: { startDate: '2026-10-20', endDate: '2026-10-28', days: 8, originalPrincipal: '200.00', capitalizedInterest: '1.00', capitalizedPrincipal: '201.00' } },
+      { id: 'first-plan-row-2', purchaseId: firstPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 2, dueDate: '2026-12-28', openingBalance: '105.00', principalDue: '100.00', compensatoryInterest: '5.00', lateInterest: '0.00', amountDue: '105.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING', capitalization: { startDate: '2026-10-20', endDate: '2026-10-28', days: 8, originalPrincipal: '200.00', capitalizedInterest: '1.00', capitalizedPrincipal: '201.00' } },
       { id: 'second-plan-row', purchaseId: secondPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-10-28', openingBalance: '80.00', principalDue: '80.00', compensatoryInterest: '0.00', lateInterest: '0.00', amountDue: '80.00', paidAmount: '0.00', currency: 'PEN', status: 'VOIDED' },
     ]);
     render(<App api={api as never} />);
@@ -743,8 +743,13 @@ describe('App por roles', () => {
     expect(within(table).queryByText('28/10/2026')).not.toBeInTheDocument();
     expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('2')).toBeVisible();
     expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('28/11/2026')).toBeVisible();
+    const capitalizationSummary = screen.getByRole('region', { name: 'Resumen de capitalización inicial' });
+    expect(within(capitalizationSummary).getByText('8 días')).toBeVisible();
+    expect(within(capitalizationSummary).getByText('20/10/2026 al 28/10/2026')).toBeVisible();
+    expect(within(capitalizationSummary).getByText('S/ 201.00')).toBeVisible();
 
     fireEvent.change(planSelector, { target: { value: secondPurchaseId } });
+    expect(screen.queryByRole('region', { name: 'Resumen de capitalización inicial' })).not.toBeInTheDocument();
     expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('1')).toBeVisible();
     expect(within(screen.getByLabelText('Resumen del plan de pago')).getByText('Sin pendientes')).toBeVisible();
   });

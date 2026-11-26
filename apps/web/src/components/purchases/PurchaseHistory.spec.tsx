@@ -32,8 +32,8 @@ const purchases: PurchaseView[] = [
 ];
 
 const schedule: ScheduleItemView[] = [
-  { id: 'obligation-1', purchaseId: octoberPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '189.90', principalDue: '92.00', compensatoryInterest: '8.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '100.00', currency: 'PEN', status: 'PAID' },
-  { id: 'obligation-2', purchaseId: octoberPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 2, dueDate: '2026-12-28', openingBalance: '97.90', principalDue: '93.00', compensatoryInterest: '2.00', lateInterest: '0.00', amountDue: '95.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING' },
+  { id: 'obligation-1', purchaseId: octoberPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 1, dueDate: '2026-11-28', openingBalance: '189.90', principalDue: '92.00', compensatoryInterest: '8.00', lateInterest: '0.00', amountDue: '100.00', paidAmount: '100.00', currency: 'PEN', status: 'PAID', capitalization: { startDate: '2026-10-20', endDate: '2026-10-28', days: 8, originalPrincipal: '189.90', capitalizedInterest: '0.90', capitalizedPrincipal: '190.80' } },
+  { id: 'obligation-2', purchaseId: octoberPurchaseId, purchasedAt: '2026-10-20T15:00:00.000Z', installmentNumber: 2, dueDate: '2026-12-28', openingBalance: '97.90', principalDue: '93.00', compensatoryInterest: '2.00', lateInterest: '0.00', amountDue: '95.00', paidAmount: '0.00', currency: 'PEN', status: 'PENDING', capitalization: { startDate: '2026-10-20', endDate: '2026-10-28', days: 8, originalPrincipal: '189.90', capitalizedInterest: '0.90', capitalizedPrincipal: '190.80' } },
 ];
 
 const detail = () => within(screen.getByRole('article', { name: /compra/i }));
@@ -66,6 +66,12 @@ describe('PurchaseHistory', () => {
     expect(products.getByText('Sin imagen')).toBeVisible();
 
     expect(detail().getByText('2 obligaciones · 1 pagada · Próximo vencimiento: 28/12/2026')).toBeVisible();
+    const capitalization = detail().getByRole('region', { name: 'Resumen de capitalización inicial' });
+    expect(within(capitalization).getByText('8 días')).toBeVisible();
+    expect(within(capitalization).getByText('20/10/2026 al 28/10/2026')).toBeVisible();
+    expect(within(capitalization).getByText('S/ 189.90')).toBeVisible();
+    expect(within(capitalization).getByText('S/ 0.90')).toBeVisible();
+    expect(within(capitalization).getByText('S/ 190.80')).toBeVisible();
     const installments = within(screen.getByRole('table', { name: 'Cuotas de la compra' }));
     expect(installments.getByText('Pagada')).toBeVisible();
     expect(installments.getByText('Pendiente')).toBeVisible();
@@ -82,6 +88,7 @@ describe('PurchaseHistory', () => {
     expect(detail().getByText('Licuadora de vidrio')).toBeVisible();
     expect(detail().queryByText('Cafetera compacta')).not.toBeInTheDocument();
     expect(detail().getByText('Esta compra no tiene obligaciones registradas.')).toBeVisible();
+    expect(detail().queryByRole('region', { name: 'Resumen de capitalización inicial' })).not.toBeInTheDocument();
   });
 
   it('filters the history by purchase month using the Lima commercial date', () => {

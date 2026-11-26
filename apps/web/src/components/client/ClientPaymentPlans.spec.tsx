@@ -15,6 +15,14 @@ const accounts: AccountView[] = [
   { id: 'account-2', accountNumber: 'CC-DEMO-PAGO', storeName: 'Bodega Demo', creditLimit: '1000.00', originalOutstanding: '50.00', currency: 'PEN' },
 ];
 const singleAccount = [accounts[0]];
+const capitalization = {
+  startDate: '2026-10-20',
+  endDate: '2026-10-28',
+  days: 8,
+  originalPrincipal: '200.00',
+  capitalizedInterest: '1.00',
+  capitalizedPrincipal: '201.00',
+};
 
 function obligation(overrides: Partial<ClientScheduleItem>): ClientScheduleItem {
   return {
@@ -32,6 +40,7 @@ function obligation(overrides: Partial<ClientScheduleItem>): ClientScheduleItem 
     paidAmount: '0.00',
     currency: 'PEN',
     status: 'PENDING',
+    capitalization: null,
     ...overrides,
   };
 }
@@ -39,8 +48,8 @@ function obligation(overrides: Partial<ClientScheduleItem>): ClientScheduleItem 
 // Orden recibido desde GET /me/schedule: por fecha de vencimiento.
 const singleAccountSchedule: ClientScheduleItem[] = [
   obligation({ id: 'second-plan-row', purchaseId: secondPurchaseId, purchasedAt: '2026-09-05T15:00:00.000Z', dueDate: '2026-10-28', amountDue: '51.00', paidAmount: '51.00', status: 'PAID' }),
-  obligation({ id: 'first-plan-row-1', installmentNumber: 1, dueDate: '2026-11-28', amountDue: '100.00', status: 'OVERDUE' }),
-  obligation({ id: 'first-plan-row-2', installmentNumber: 2, dueDate: '2026-12-28', amountDue: '105.00', status: 'PENDING' }),
+  obligation({ id: 'first-plan-row-1', installmentNumber: 1, dueDate: '2026-11-28', amountDue: '100.00', status: 'OVERDUE', capitalization }),
+  obligation({ id: 'first-plan-row-2', installmentNumber: 2, dueDate: '2026-12-28', amountDue: '105.00', status: 'PENDING', capitalization }),
 ];
 
 const twoAccountSchedule: ClientScheduleItem[] = [
@@ -75,6 +84,7 @@ describe('ClientPaymentPlans', () => {
     expect(metric('Cuotas pagadas').getByText('1')).toBeVisible();
     expect(metric('Próximo vencimiento').getByText('28/11/2026')).toBeVisible();
     expect(metric('Importe del próximo vencimiento').getByText('S/ 100.00')).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Resumen de capitalización inicial' })).not.toBeInTheDocument();
   });
 
   it('filters rows and summary by the selected purchase plan', () => {
@@ -89,8 +99,12 @@ describe('ClientPaymentPlans', () => {
     expect(metric('Obligaciones del plan').getByText('2')).toBeVisible();
     expect(metric('Cuotas pagadas').getByText('0')).toBeVisible();
     expect(metric('Próximo vencimiento').getByText('28/11/2026')).toBeVisible();
+    const capitalizationSummary = screen.getByRole('region', { name: 'Resumen de capitalización inicial' });
+    expect(within(capitalizationSummary).getByText('8 días')).toBeVisible();
+    expect(within(capitalizationSummary).getByText('S/ 201.00')).toBeVisible();
 
     fireEvent.change(selector, { target: { value: secondPurchaseId } });
+    expect(screen.queryByRole('region', { name: 'Resumen de capitalización inicial' })).not.toBeInTheDocument();
     expect(planTable().getAllByRole('row')).toHaveLength(2);
     expect(metric('Obligaciones del plan').getByText('1')).toBeVisible();
     expect(metric('Cuotas pagadas').getByText('1')).toBeVisible();
@@ -99,6 +113,7 @@ describe('ClientPaymentPlans', () => {
 
     fireEvent.change(selector, { target: { value: 'all' } });
     expect(planTable().getAllByRole('row')).toHaveLength(4);
+    expect(screen.queryByRole('region', { name: 'Resumen de capitalización inicial' })).not.toBeInTheDocument();
   });
 
   it('never mixes plans from different accounts of the same client', () => {
